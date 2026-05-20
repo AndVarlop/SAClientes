@@ -69,12 +69,12 @@ import { Movimiento } from '../../core/models/movimiento.model';
         <!-- Búsqueda -->
         <div style="background:#18181b; border:1px solid #27272a; border-radius:16px; padding:20px"
              class="mb-5">
-          <label class="text-white text-sm font-semibold block mb-3">Buscar por nombre</label>
+          <label class="text-white text-sm font-semibold block mb-3">Buscar por nombre o teléfono</label>
           <div class="flex gap-2">
             <div class="relative flex-1">
               <i class="pi pi-search absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 text-sm"></i>
               <input class="search-input" [(ngModel)]="busqueda"
-                     placeholder="Escribe tu nombre..." (keyup.enter)="buscar()" />
+                     placeholder="Nombre o número de teléfono..." (keyup.enter)="buscar()" />
             </div>
             <button class="search-btn" [disabled]="buscando()" (click)="buscar()">
               @if (buscando()) { <i class="pi pi-spinner pi-spin"></i> }

@@ -25,11 +25,11 @@ export class ClientesService {
     return data as SaldoCliente;
   }
 
-  async buscarPorNombre(nombre: string): Promise<SaldoCliente[]> {
+  async buscarPorNombre(query: string): Promise<SaldoCliente[]> {
     const { data, error } = await this.sb
       .from('saldos_clientes')
       .select('*')
-      .ilike('nombre', `%${nombre}%`)
+      .or(`nombre.ilike.%${query}%,telefono.ilike.%${query}%`)
       .eq('activo', true);
     if (error) throw error;
     return (data ?? []) as SaldoCliente[];
