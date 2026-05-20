@@ -36,6 +36,14 @@ export class MovimientosService {
     return data;
   }
 
+  async eliminar(id: string) {
+    const { error } = await this.sb
+      .from('movimientos')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+  }
+
   async compraRapida(clienteId: string, productoNombre: string, monto: number, userId: string) {
     return this.registrar({
       cliente_id: clienteId,
