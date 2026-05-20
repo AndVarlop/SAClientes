@@ -42,3 +42,11 @@ __screenshots__/
 # System files
 .DS_Store
 Thumbs.db
+
+# Claude Code memory
+.claude/
+
+# Old misplaced folders (replaced by src/app/core and src/app/features)
+/core/
+/features/
+/enviroment.ts
