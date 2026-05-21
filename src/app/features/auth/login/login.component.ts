@@ -61,9 +61,8 @@ import { ToastModule } from 'primeng/toast';
       <!-- LEFT — branding -->
       <div class="login-left hidden lg:flex flex-col justify-between p-12 w-[420px] shrink-0">
         <div class="flex items-center gap-3">
-          <div class="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center">
-            <i class="pi pi-building text-white"></i>
-          </div>
+          <img src="S&A-Clientes-logo.png" alt="S&A Clientes"
+               style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.3)">
           <span class="text-white font-bold text-lg">S&A Clientes</span>
         </div>
 
@@ -97,9 +96,8 @@ import { ToastModule } from 'primeng/toast';
 
           <!-- Mobile logo -->
           <div class="lg:hidden text-center mb-8">
-            <div class="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-3">
-              <i class="pi pi-building text-white text-xl"></i>
-            </div>
+            <img src="S&A-Clientes-logo.png" alt="S&A Clientes"
+                 style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:3px solid #6366f1;margin:0 auto 12px">
             <h1 class="text-white font-bold text-xl">S&A Clientes</h1>
           </div>
 

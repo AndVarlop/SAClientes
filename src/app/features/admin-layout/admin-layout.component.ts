@@ -91,9 +91,8 @@ import { ConfirmDialog } from 'primeng/confirmdialog';
 
         <!-- Logo -->
         <div class="flex items-center gap-3 px-5 py-5 border-b border-zinc-800/60">
-          <div class="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center shrink-0">
-            <i class="pi pi-building text-white text-sm"></i>
-          </div>
+          <img src="S&A-Clientes-logo.png" alt="S&A Clientes"
+               style="width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid #6366f1;flex-shrink:0">
           <div>
             <p class="text-white font-bold text-sm leading-none">S&A Clientes</p>
             <p class="text-zinc-500 text-[11px] mt-0.5">Panel admin</p>
@@ -145,9 +144,8 @@ import { ConfirmDialog } from 'primeng/confirmdialog';
             <i class="pi pi-bars"></i>
           </button>
           <div class="flex items-center gap-2">
-            <div class="w-6 h-6 bg-indigo-600 rounded-lg flex items-center justify-center">
-              <i class="pi pi-building text-white text-xs"></i>
-            </div>
+            <img src="S&A-Clientes-logo.png" alt="S&A Clientes"
+                 style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:1.5px solid #6366f1">
             <span class="text-white font-semibold text-sm">S&A Clientes</span>
           </div>
         </header>

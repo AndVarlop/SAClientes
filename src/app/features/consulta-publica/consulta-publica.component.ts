@@ -56,9 +56,8 @@ import { Movimiento } from '../../core/models/movimiento.model';
       <div style="background: linear-gradient(135deg, #0f0f12 0%, #18113a 100%)"
            class="pt-12 pb-10 px-4">
         <div class="max-w-xl mx-auto text-center">
-          <div class="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-5">
-            <i class="pi pi-building text-white text-xl"></i>
-          </div>
+          <img src="S&A-Clientes-logo.png" alt="S&A Clientes"
+               style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid #6366f1;margin:0 auto 20px;display:block">
           <h1 class="text-3xl font-bold text-white">S&A Clientes</h1>
           <p class="text-zinc-400 text-sm mt-2">Consulta tu saldo y movimientos</p>
         </div>
