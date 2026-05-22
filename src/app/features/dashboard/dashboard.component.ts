@@ -1,8 +1,9 @@
-import { Component, inject, signal, computed, OnInit } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, effect } from '@angular/core';
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { ClientesService } from '../../core/services/clientes.service';
 import { MovimientosService } from '../../core/services/movimientos.service';
+import { AnimationService } from '../../core/services/animation.service';
 import { SaldoCliente } from '../../core/models/cliente.model';
 import { MovimientoConCliente } from '../../core/models/movimiento.model';
 
@@ -92,8 +93,8 @@ import { MovimientoConCliente } from '../../core/models/movimiento.model';
       } @else {
 
         <!-- Stats -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-7">
-          <div class="stat-card">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-7 stagger">
+          <div class="stat-card" style="opacity:0">
             <div class="stat-icon" style="background: rgb(99 102 241 / 0.12)">
               <i class="pi pi-chart-line" style="color: #818cf8"></i>
             </div>
@@ -105,7 +106,7 @@ import { MovimientoConCliente } from '../../core/models/movimiento.model';
             </div>
           </div>
 
-          <div class="stat-card">
+          <div class="stat-card" style="opacity:0">
             <div class="stat-icon" style="background: rgb(245 158 11 / 0.12)">
               <i class="pi pi-clock" style="color: #fbbf24"></i>
             </div>
@@ -117,7 +118,7 @@ import { MovimientoConCliente } from '../../core/models/movimiento.model';
             </div>
           </div>
 
-          <div class="stat-card">
+          <div class="stat-card" style="opacity:0">
             <div class="stat-icon" style="background: rgb(34 197 94 / 0.1)">
               <i class="pi pi-users" style="color: #4ade80"></i>
             </div>
@@ -229,6 +230,7 @@ import { MovimientoConCliente } from '../../core/models/movimiento.model';
 export class DashboardComponent implements OnInit {
   private clientesSvc = inject(ClientesService);
   private movSvc = inject(MovimientosService);
+  private anim = inject(AnimationService);
 
   cargando = signal(true);
   clientes = signal<SaldoCliente[]>([]);
@@ -246,6 +248,18 @@ export class DashboardComponent implements OnInit {
       .sort((a, b) => b.saldo - a.saldo)
       .slice(0, 6)
   );
+
+  constructor() {
+    // Animate stats + panels once data loads
+    effect(() => {
+      if (!this.cargando()) {
+        setTimeout(() => {
+          this.anim.staggerFadeUp('.stat-card', 80);
+          this.anim.fadeUp('.card-dark', 200, 500);
+        }, 20);
+      }
+    });
+  }
 
   async ngOnInit() {
     try {

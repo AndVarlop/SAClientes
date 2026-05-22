@@ -1,5 +1,6 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, afterNextRender } from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
+import { AnimationService } from '../../core/services/animation.service';
 import { AuthService } from '../../core/services/auth.service';
 import { Toast } from 'primeng/toast';
 import { ConfirmDialog } from 'primeng/confirmdialog';
@@ -160,8 +161,16 @@ import { ConfirmDialog } from 'primeng/confirmdialog';
 export class AdminLayoutComponent {
   private auth = inject(AuthService);
   private router = inject(Router);
+  private anim = inject(AnimationService);
 
   menuAbierto = signal(false);
+
+  constructor() {
+    afterNextRender(() => {
+      this.anim.slideInLeft('aside', 0);
+      this.anim.staggerFadeUp('.nav-item', 50, 150);
+    });
+  }
   userEmail = this.auth.user;
 
   navItems = [

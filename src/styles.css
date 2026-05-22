@@ -4,6 +4,65 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Smooth scroll ── */
+html { scroll-behavior: smooth; }
+
+/* ── View transitions (Angular withViewTransitions) ── */
+::view-transition-old(root) {
+  animation: 220ms cubic-bezier(0.4, 0, 1, 1) both fade-out;
+}
+::view-transition-new(root) {
+  animation: 280ms cubic-bezier(0, 0, 0.2, 1) 60ms both slide-from-bottom;
+}
+@keyframes fade-out {
+  to { opacity: 0; }
+}
+@keyframes slide-from-bottom {
+  from { opacity: 0; transform: translateY(10px); }
+}
+
+/* ── Keyframes ── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-6px); }
+}
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(99 102 241 / 0); }
+  50%       { box-shadow: 0 0 20px 4px rgb(99 102 241 / 0.25); }
+}
+
+/* ── CSS animation utilities ── */
+.anim-fade-up  { animation: fadeUp  0.5s cubic-bezier(0.16,1,0.3,1) both; }
+.anim-fade-in  { animation: fadeIn  0.35s ease both; }
+.anim-scale-in { animation: scaleIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both; }
+.anim-float    { animation: float 3s ease-in-out infinite; }
+.anim-glow     { animation: glow-pulse 2.5s ease-in-out infinite; }
+
+/* Stagger delays for direct children */
+.stagger > *:nth-child(1)  { animation-delay: 0ms; }
+.stagger > *:nth-child(2)  { animation-delay: 60ms; }
+.stagger > *:nth-child(3)  { animation-delay: 120ms; }
+.stagger > *:nth-child(4)  { animation-delay: 180ms; }
+.stagger > *:nth-child(5)  { animation-delay: 240ms; }
+.stagger > *:nth-child(6)  { animation-delay: 300ms; }
+.stagger > *:nth-child(n+7){ animation-delay: 360ms; }
+
 body {
   background: #09090b;
   color: #fafafa;
@@ -12,9 +71,29 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ── Custom scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: #6366f1; }
+
+/* ── Global micro-interactions ── */
+button:not(:disabled) {
+  transition: transform 0.12s ease, opacity 0.12s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+button:not(:disabled):active {
+  transform: scale(0.96) !important;
+}
+a { transition: color 0.15s ease, opacity 0.15s ease; }
+
 /* ── Layout ── */
 .card-dark {
   @apply bg-zinc-900 border border-zinc-800 rounded-2xl p-5;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+.card-dark:hover {
+  border-color: #3f3f46;
+  box-shadow: 0 4px 24px rgb(0 0 0 / 0.25);
 }
 
 .card-dark-sm {
@@ -90,4 +169,58 @@ body {
 
 .p-progressspinner-circle {
   stroke: #6366f1 !important;
+}
+
+/* ── Stat cards hover lift ── */
+.stat-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease !important;
+}
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgb(0 0 0 / 0.3);
+  border-color: #3f3f46 !important;
+}
+
+/* ── Result cards ── */
+.result-card {
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease !important;
+}
+.result-card:hover { transform: translateY(-1px); }
+
+/* ── Nav item hover glow ── */
+.nav-item {
+  transition: all 0.15s ease !important;
+  position: relative;
+}
+.nav-item:hover {
+  padding-left: 14px !important;
+}
+.nav-item.active-nav {
+  box-shadow: inset 0 0 20px rgb(99 102 241 / 0.06);
+}
+
+/* ── Indigo button glow on hover ── */
+.p-button:not(.p-button-secondary):not(.p-button-danger):not(.p-button-success):hover {
+  box-shadow: 0 4px 20px rgb(99 102 241 / 0.4) !important;
+}
+.p-button-success:hover {
+  box-shadow: 0 4px 20px rgb(34 197 94 / 0.35) !important;
+}
+
+/* ── Focus ring enhancement on custom inputs ── */
+.fecha-input:focus,
+.rechazo-input:focus,
+.search-input:focus,
+.monto-input:focus {
+  box-shadow: 0 0 0 3px rgb(99 102 241 / 0.15) !important;
+}
+
+/* ── Dialog entrance ── */
+.p-dialog {
+  animation: scaleIn 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) both !important;
+}
+
+/* ── Sidebar initial opacity for animation ── */
+aside {
+  opacity: 0;
 }

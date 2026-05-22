@@ -1,10 +1,11 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, afterNextRender, effect } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { ClientesService } from '../../core/services/clientes.service';
 import { MovimientosService } from '../../core/services/movimientos.service';
 import { StorageService } from '../../core/services/storage.service';
 import { SolicitudesPagoService } from '../../core/services/solicitudes-pago.service';
+import { AnimationService } from '../../core/services/animation.service';
 import { SaldoCliente } from '../../core/models/cliente.model';
 import { Movimiento } from '../../core/models/movimiento.model';
 import { SolicitudPago } from '../../core/services/solicitudes-pago.service';
@@ -80,17 +81,18 @@ import { SolicitudPago } from '../../core/services/solicitudes-pago.service';
       <div style="background: linear-gradient(135deg, #0f0f12 0%, #18113a 100%)"
            class="pt-12 pb-10 px-4">
         <div class="max-w-xl mx-auto text-center">
-          <img src="S&A-Clientes-logo.png" alt="S&A Clientes"
-               style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid #6366f1;margin:0 auto 20px;display:block">
-          <h1 class="text-3xl font-bold text-white">S&A Clientes</h1>
-          <p class="text-zinc-400 text-sm mt-2">Consulta tu saldo y movimientos</p>
+          <img id="hero-logo" src="S&A-Clientes-logo.png" alt="S&A Clientes"
+               style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid #6366f1;margin:0 auto 20px;display:block;opacity:0"
+               class="anim-float">
+          <h1 id="hero-title" class="text-3xl font-bold text-white" style="opacity:0">S&A Clientes</h1>
+          <p id="hero-sub" class="text-zinc-400 text-sm mt-2" style="opacity:0">Consulta tu saldo y movimientos</p>
         </div>
       </div>
 
       <div class="max-w-xl mx-auto px-4 py-6">
 
         <!-- Búsqueda -->
-        <div style="background:#18181b; border:1px solid #27272a; border-radius:16px; padding:20px"
+        <div id="search-box" style="background:#18181b; border:1px solid #27272a; border-radius:16px; padding:20px; opacity:0"
              class="mb-5">
           <label class="text-white text-sm font-semibold block mb-3">Buscar por nombre o teléfono</label>
           <div class="flex gap-2">
@@ -443,6 +445,7 @@ export class ConsultaPublicaComponent {
   private movSvc = inject(MovimientosService);
   private storageSvc = inject(StorageService);
   private solicitudesSvc = inject(SolicitudesPagoService);
+  private anim = inject(AnimationService);
 
   busqueda = '';
   buscado = signal(false);
@@ -459,6 +462,24 @@ export class ConsultaPublicaComponent {
     const s = this.ultimaSolicitud();
     return !s || s.estado !== 'PENDIENTE';
   });
+
+  constructor() {
+    afterNextRender(() => {
+      // Hero entrance
+      this.anim.scaleIn('#hero-logo', 0);
+      this.anim.fadeUp('#hero-title', 120);
+      this.anim.fadeUp('#hero-sub', 220);
+      this.anim.fadeUp('#search-box', 320);
+    });
+
+    // Animate results when they change
+    effect(() => {
+      const results = this.resultados();
+      if (results.length > 0) {
+        setTimeout(() => this.anim.staggerFadeUp('.result-card', 60, 0), 10);
+      }
+    });
+  }
 
   // Payment state
   tipoPago: 'TOTAL' | 'ABONO' = 'TOTAL';
