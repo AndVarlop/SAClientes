@@ -167,7 +167,6 @@ export class AdminLayoutComponent {
 
   constructor() {
     afterNextRender(() => {
-      this.anim.slideInLeft('aside', 0);
       this.anim.staggerFadeUp('.nav-item', 50, 150);
     });
   }
