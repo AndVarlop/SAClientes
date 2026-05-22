@@ -34,6 +34,11 @@ export const routes: Routes = [
         path: 'movimientos',
         loadChildren: () => import('./features/movimientos/movimientos.routes')
           .then(m => m.MOVIMIENTOS_ROUTES)
+      },
+      {
+        path: 'pagos',
+        loadComponent: () => import('./features/pagos/pagos.component')
+          .then(m => m.PagosComponent)
       }
     ]
   },

@@ -1,10 +1,13 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { ClientesService } from '../../core/services/clientes.service';
 import { MovimientosService } from '../../core/services/movimientos.service';
+import { StorageService } from '../../core/services/storage.service';
+import { SolicitudesPagoService } from '../../core/services/solicitudes-pago.service';
 import { SaldoCliente } from '../../core/models/cliente.model';
 import { Movimiento } from '../../core/models/movimiento.model';
+import { SolicitudPago } from '../../core/services/solicitudes-pago.service';
 
 @Component({
   selector: 'app-consulta-publica',
@@ -18,6 +21,13 @@ import { Movimiento } from '../../core/models/movimiento.model';
     }
     .search-input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgb(99 102 241/0.12); }
     .search-input::placeholder { color: #52525b; }
+    .monto-input {
+      width: 100%; background: #18181b; border: 1px solid #27272a;
+      border-radius: 12px; padding: 13px 16px;
+      color: white; font-size: 15px; outline: none; transition: border-color 0.2s;
+    }
+    .monto-input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgb(99 102 241/0.12); }
+    .monto-input::placeholder { color: #52525b; }
     .search-btn {
       background: #6366f1; color: white; border: none; border-radius: 12px;
       padding: 13px 20px; font-weight: 600; font-size: 14px; cursor: pointer;
@@ -47,6 +57,20 @@ import { Movimiento } from '../../core/models/movimiento.model';
       padding: 14px; margin-top: 4px; margin-bottom: 4px;
       animation: fadeIn 0.15s ease;
     }
+    .tipo-btn {
+      flex: 1; padding: 10px; border-radius: 10px; font-size: 13px; font-weight: 600;
+      border: 1px solid #27272a; background: #111; color: #71717a;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .tipo-activo {
+      background: rgb(99 102 241/0.15); border-color: #6366f1; color: white;
+    }
+    .upload-area {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: #111; border: 2px dashed #27272a; border-radius: 14px;
+      padding: 32px 16px; cursor: pointer; transition: border-color 0.15s; width: 100%;
+    }
+    .upload-area:hover { border-color: #6366f1; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
   `],
   template: `
@@ -157,6 +181,151 @@ import { Movimiento } from '../../core/models/movimiento.model';
               </div>
             </div>
 
+            <!-- Estado de solicitud existente -->
+            @if (ultimaSolicitud() && !enviado()) {
+              @if (ultimaSolicitud()!.estado === 'PENDIENTE') {
+                <div style="background:rgb(234 179 8/0.08); border:1px solid rgb(234 179 8/0.3); border-radius:20px; padding:24px"
+                     class="mb-4 text-center">
+                  <i class="pi pi-clock text-4xl text-yellow-400 block mb-3"></i>
+                  <p class="text-white font-semibold">Solicitud en revisión</p>
+                  <p class="text-zinc-400 text-sm mt-1">
+                    Enviaste un pago de
+                    <span class="text-yellow-300 font-semibold">{{ ultimaSolicitud()!.monto | currency:'COP':'$ ':'1.0-0' }}</span>.
+                    El administrador lo está revisando.
+                  </p>
+                </div>
+              }
+              @if (ultimaSolicitud()!.estado === 'APROBADO') {
+                <div style="background:rgb(34 197 94/0.08); border:1px solid rgb(34 197 94/0.3); border-radius:20px; padding:24px"
+                     class="mb-4 text-center">
+                  <i class="pi pi-check-circle text-4xl text-green-400 block mb-3"></i>
+                  <p class="text-white font-semibold">¡Pago aprobado!</p>
+                  <p class="text-zinc-400 text-sm mt-1">
+                    Tu pago de
+                    <span class="text-green-300 font-semibold">{{ ultimaSolicitud()!.monto | currency:'COP':'$ ':'1.0-0' }}</span>
+                    fue confirmado.
+                  </p>
+                </div>
+              }
+              @if (ultimaSolicitud()!.estado === 'RECHAZADO') {
+                <div style="background:rgb(239 68 68/0.08); border:1px solid rgb(239 68 68/0.3); border-radius:20px; padding:24px"
+                     class="mb-4">
+                  <div class="text-center mb-3">
+                    <i class="pi pi-times-circle text-4xl text-red-400 block mb-2"></i>
+                    <p class="text-white font-semibold">Pago no aprobado</p>
+                  </div>
+                  @if (ultimaSolicitud()!.admin_nota) {
+                    <div style="background:rgb(239 68 68/0.1); border-radius:10px; padding:10px" class="mb-3">
+                      <p class="text-red-300 text-sm text-center">{{ ultimaSolicitud()!.admin_nota }}</p>
+                    </div>
+                  }
+                  <p class="text-zinc-400 text-xs text-center">Puedes intentar de nuevo con un nuevo comprobante.</p>
+                </div>
+              }
+            }
+
+            <!-- Sección de pago -->
+            @if (clienteSeleccionado()!.saldo > 0 && mostrarFormPago()) {
+              @if (!enviado()) {
+                <div style="background:#1a1025; border:1px solid #3730a3; border-radius:20px; padding:24px"
+                     class="mb-4">
+                  <h3 class="text-white font-semibold mb-4 flex items-center gap-2">
+                    <i class="pi pi-credit-card text-indigo-400"></i> Realizar pago
+                  </h3>
+
+                  <!-- Tipo de pago -->
+                  <div class="flex gap-2 mb-4">
+                    <button class="tipo-btn" [class.tipo-activo]="tipoPago === 'TOTAL'"
+                            (click)="tipoPago = 'TOTAL'">
+                      Pago total
+                    </button>
+                    <button class="tipo-btn" [class.tipo-activo]="tipoPago === 'ABONO'"
+                            (click)="tipoPago = 'ABONO'">
+                      Abono parcial
+                    </button>
+                  </div>
+
+                  <!-- Monto -->
+                  @if (tipoPago === 'TOTAL') {
+                    <div style="background:#111; border:1px solid #1f1f23; border-radius:12px; padding:14px"
+                         class="mb-4">
+                      <p class="text-zinc-500 text-xs mb-1">Monto a pagar</p>
+                      <p class="text-2xl font-bold text-yellow-400">
+                        {{ clienteSeleccionado()!.saldo | currency:'COP':'$ ':'1.0-0' }}
+                      </p>
+                    </div>
+                  } @else {
+                    <div class="mb-4">
+                      <label class="text-zinc-400 text-xs block mb-1">Monto a abonar (COP)</label>
+                      <input type="number" class="monto-input" [(ngModel)]="montoPago"
+                             placeholder="Ej: 50000" min="1"
+                             [max]="clienteSeleccionado()!.saldo" />
+                    </div>
+                  }
+
+                  <!-- Info Nequi -->
+                  <div style="background:#111; border:1px solid #1f1f23; border-radius:14px; padding:16px"
+                       class="mb-4">
+                    <p class="text-zinc-500 text-xs uppercase tracking-wider mb-2">Paga a este número Nequi</p>
+                    <div class="flex items-center justify-between">
+                      <p class="text-white text-2xl font-bold tracking-widest">3014030939</p>
+                      <button (click)="copiarNequi()"
+                              style="color:#818cf8; font-size:12px; border:1px solid #3730a3; background:transparent; border-radius:8px; padding:6px 12px; cursor:pointer">
+                        <i class="pi pi-copy mr-1"></i>{{ copiado ? 'Copiado' : 'Copiar' }}
+                      </button>
+                    </div>
+                    <p class="text-zinc-600 text-xs mt-2">Envía el pago y toma captura de pantalla</p>
+                  </div>
+
+                  <!-- Foto comprobante -->
+                  <div class="mb-4">
+                    <label class="text-zinc-400 text-xs block mb-2">
+                      Foto del comprobante <span class="text-red-500">*</span>
+                    </label>
+                    @if (!fotoFile) {
+                      <label for="foto-comprobante" class="upload-area">
+                        <i class="pi pi-camera text-3xl text-zinc-600 block mb-2"></i>
+                        <p class="text-zinc-400 text-sm font-medium">Adjuntar captura de pago</p>
+                        <p class="text-zinc-600 text-xs mt-1">Toca para seleccionar o tomar foto</p>
+                        <input id="foto-comprobante" type="file" accept="image/*" class="hidden"
+                               (change)="onFotoChange($event)" />
+                      </label>
+                    } @else {
+                      <div style="position:relative">
+                        <img [src]="fotoPreview" alt="Comprobante"
+                             style="width:100%; max-height:220px; object-fit:cover; border-radius:14px; border:1px solid #3730a3" />
+                        <button (click)="quitarFoto()"
+                                style="position:absolute; top:8px; right:8px; background:rgba(0,0,0,0.75); color:#f87171; border:1px solid #f87171; border-radius:8px; padding:4px 12px; font-size:12px; cursor:pointer">
+                          Cambiar
+                        </button>
+                      </div>
+                    }
+                  </div>
+
+                  @if (errorEnvio()) {
+                    <div style="background:rgb(239 68 68/0.1); border:1px solid rgb(239 68 68/0.3); border-radius:10px; padding:10px 14px"
+                         class="mb-3">
+                      <p class="text-red-400 text-sm">{{ errorEnvio() }}</p>
+                    </div>
+                  }
+
+                  <button (click)="enviarPago()" [disabled]="enviando() || !puedeEnviar()"
+                          class="search-btn" style="width:100%; justify-content:center">
+                    @if (enviando()) { <i class="pi pi-spinner pi-spin"></i> Enviando... }
+                    @else { <i class="pi pi-send"></i> Enviar comprobante }
+                  </button>
+                </div>
+              } @else {
+                <!-- Éxito -->
+                <div style="background:rgb(34 197 94/0.08); border:1px solid rgb(34 197 94/0.3); border-radius:20px; padding:40px 24px"
+                     class="mb-4 text-center">
+                  <i class="pi pi-check-circle text-5xl text-green-400 block mb-3"></i>
+                  <p class="text-white font-semibold text-lg">¡Comprobante enviado!</p>
+                  <p class="text-zinc-400 text-sm mt-1">El administrador revisará y confirmará tu pago pronto.</p>
+                </div>
+              }
+            }
+
             <!-- Historial con detalle expandible -->
             <div style="background:#18181b; border:1px solid #27272a; border-radius:16px; padding:20px">
               <h3 class="text-white font-semibold text-sm mb-1">Historial de movimientos</h3>
@@ -206,7 +375,6 @@ import { Movimiento } from '../../core/models/movimiento.model';
                         Detalle del movimiento
                       </p>
 
-                      <!-- Items de la compra (uno por línea) -->
                       @if (tieneItems(m.descripcion)) {
                         <div class="mb-3">
                           <p class="text-zinc-400 text-xs mb-1">Productos:</p>
@@ -221,7 +389,6 @@ import { Movimiento } from '../../core/models/movimiento.model';
                         <p class="text-white text-sm mb-3">{{ m.descripcion }}</p>
                       }
 
-                      <!-- Info adicional -->
                       <div class="grid grid-cols-2 gap-3 text-xs">
                         <div>
                           <p class="text-zinc-500">Tipo</p>
@@ -274,6 +441,8 @@ import { Movimiento } from '../../core/models/movimiento.model';
 export class ConsultaPublicaComponent {
   private clientesSvc = inject(ClientesService);
   private movSvc = inject(MovimientosService);
+  private storageSvc = inject(StorageService);
+  private solicitudesSvc = inject(SolicitudesPagoService);
 
   busqueda = '';
   buscado = signal(false);
@@ -282,7 +451,24 @@ export class ConsultaPublicaComponent {
   resultados = signal<SaldoCliente[]>([]);
   clienteSeleccionado = signal<SaldoCliente | null>(null);
   movimientos = signal<Movimiento[]>([]);
+  solicitudesCliente = signal<SolicitudPago[]>([]);
   detalleAbierto: string | null = null;
+
+  ultimaSolicitud = computed(() => this.solicitudesCliente()[0] ?? null);
+  mostrarFormPago = computed(() => {
+    const s = this.ultimaSolicitud();
+    return !s || s.estado !== 'PENDIENTE';
+  });
+
+  // Payment state
+  tipoPago: 'TOTAL' | 'ABONO' = 'TOTAL';
+  montoPago = '';
+  fotoFile: File | null = null;
+  fotoPreview = '';
+  copiado = false;
+  enviando = signal(false);
+  enviado = signal(false);
+  errorEnvio = signal('');
 
   async buscar() {
     const q = this.busqueda.trim();
@@ -300,9 +486,20 @@ export class ConsultaPublicaComponent {
   async seleccionar(c: SaldoCliente) {
     this.clienteSeleccionado.set(c);
     this.detalleAbierto = null;
+    this.tipoPago = 'TOTAL';
+    this.montoPago = '';
+    this.quitarFoto();
+    this.enviado.set(false);
+    this.errorEnvio.set('');
+    this.solicitudesCliente.set([]);
     this.cargandoMovs.set(true);
     try {
-      this.movimientos.set(await this.movSvc.getByCliente(c.id));
+      const [movs, solicitudes] = await Promise.all([
+        this.movSvc.getByCliente(c.id),
+        this.solicitudesSvc.getByCliente(c.id)
+      ]);
+      this.movimientos.set(movs);
+      this.solicitudesCliente.set(solicitudes);
     } finally {
       this.cargandoMovs.set(false);
     }
@@ -319,5 +516,56 @@ export class ConsultaPublicaComponent {
   parseItems(desc: string | undefined): string[] {
     if (!desc) return [];
     return desc.split(', ').filter(Boolean);
+  }
+
+  onFotoChange(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    this.quitarFoto();
+    this.fotoFile = file;
+    this.fotoPreview = URL.createObjectURL(file);
+  }
+
+  quitarFoto() {
+    if (this.fotoPreview) URL.revokeObjectURL(this.fotoPreview);
+    this.fotoFile = null;
+    this.fotoPreview = '';
+  }
+
+  copiarNequi() {
+    navigator.clipboard.writeText('3014030939').catch(() => {});
+    this.copiado = true;
+    setTimeout(() => (this.copiado = false), 2000);
+  }
+
+  puedeEnviar(): boolean {
+    if (!this.fotoFile) return false;
+    if (this.tipoPago === 'ABONO') {
+      const v = Number(this.montoPago);
+      return v > 0 && v <= (this.clienteSeleccionado()?.saldo ?? 0);
+    }
+    return true;
+  }
+
+  async enviarPago() {
+    const cliente = this.clienteSeleccionado();
+    if (!cliente || !this.fotoFile) return;
+
+    const monto = this.tipoPago === 'TOTAL' ? cliente.saldo : Number(this.montoPago);
+    if (monto <= 0) return;
+
+    this.enviando.set(true);
+    this.errorEnvio.set('');
+    try {
+      const foto_url = await this.storageSvc.subirComprobante(cliente.id, this.fotoFile);
+      await this.solicitudesSvc.crear({ cliente_id: cliente.id, monto, tipo: this.tipoPago, foto_url });
+      this.solicitudesCliente.set(await this.solicitudesSvc.getByCliente(cliente.id));
+      this.enviado.set(true);
+    } catch (e: any) {
+      this.errorEnvio.set(e?.message || 'Error al enviar. Verifica tu conexión e intenta de nuevo.');
+    } finally {
+      this.enviando.set(false);
+    }
   }
 }

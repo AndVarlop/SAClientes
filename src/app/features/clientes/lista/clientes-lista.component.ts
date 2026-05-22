@@ -28,8 +28,8 @@ import { DialogModule } from 'primeng/dialog';
       <div class="mb-4">
         <span class="p-input-icon-left w-full">
           <i class="pi pi-search"></i>
-          <input pInputText [(ngModel)]="busqueda" placeholder="Buscar cliente..."
-                 class="w-full" (input)="filtrar()" />
+          <input pInputText [ngModel]="busqueda()" (ngModelChange)="busqueda.set($event)"
+                 placeholder="Buscar cliente..." class="w-full" />
         </span>
       </div>
 
@@ -108,14 +108,16 @@ export class ClientesListaComponent implements OnInit {
   cargando = signal(true);
   guardando = signal(false);
   mostrarForm = false;
-  busqueda = '';
+  busqueda = signal('');
   clientes = signal<SaldoCliente[]>([]);
   clienteEdit: SaldoCliente | null = null;
 
   clientesFiltrados = computed(() => {
-    const q = this.busqueda.toLowerCase().trim();
+    const q = this.busqueda().toLowerCase().trim();
     if (!q) return this.clientes();
-    return this.clientes().filter(c => c.nombre.toLowerCase().includes(q));
+    return this.clientes().filter(c =>
+      c.nombre.toLowerCase().includes(q) || (c.telefono ?? '').includes(q)
+    );
   });
 
   form = this.fb.group({
@@ -135,8 +137,6 @@ export class ClientesListaComponent implements OnInit {
       this.cargando.set(false);
     }
   }
-
-  filtrar() {}
 
   abrirFormulario() {
     this.clienteEdit = null;
