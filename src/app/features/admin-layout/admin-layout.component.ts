@@ -178,6 +178,7 @@ export class AdminLayoutComponent {
     { path: '/admin/productos', label: 'Productos', icon: 'pi pi-box' },
     { path: '/admin/movimientos', label: 'Movimientos', icon: 'pi pi-list' },
     { path: '/admin/pagos', label: 'Pagos', icon: 'pi pi-wallet' },
+    { path: '/admin/inventario', label: 'Inventario', icon: 'pi pi-warehouse' },
   ];
 
   async logout() {

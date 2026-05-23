@@ -43,6 +43,9 @@ import { InputNumberModule } from 'primeng/inputnumber';
                 <div>
                   <p class="text-white font-medium text-sm">{{ p.nombre }}</p>
                   <p class="text-indigo-400 font-bold">{{ p.precio | currency:'COP':'$ ':'1.0-0' }}</p>
+                  @if (p.precio_costo) {
+                    <p class="text-zinc-500 text-xs">Costo: {{ p.precio_costo | currency:'COP':'$ ':'1.0-0' }}</p>
+                  }
                 </div>
                 <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button pButton icon="pi pi-pencil" size="small" severity="secondary"
@@ -66,9 +69,18 @@ import { InputNumberModule } from 'primeng/inputnumber';
           <input pInputText formControlName="nombre" placeholder="Ej: Coca Cola" class="w-full" />
         </div>
         <div class="flex flex-col gap-1.5">
-          <label class="text-zinc-300 text-sm font-medium">Precio *</label>
+          <label class="text-zinc-300 text-sm font-medium">Precio venta *</label>
           <p-inputnumber formControlName="precio" mode="currency" currency="COP"
                          locale="es-CO" placeholder="0" styleClass="w-full" />
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <label class="text-zinc-300 text-sm font-medium">Precio costo</label>
+          <p-inputnumber formControlName="precio_costo" mode="currency" currency="COP"
+                         locale="es-CO" placeholder="0 (opcional)" styleClass="w-full" />
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <label class="text-zinc-300 text-sm font-medium">Unidad</label>
+          <input pInputText formControlName="unidad" placeholder="unidad, caja, paquete..." class="w-full" />
         </div>
       </form>
       <ng-template pTemplate="footer">
@@ -92,7 +104,9 @@ export class ProductosComponent implements OnInit {
 
   form = this.fb.group({
     nombre: ['', Validators.required],
-    precio: [null as number | null, [Validators.required, Validators.min(0)]]
+    precio: [null as number | null, [Validators.required, Validators.min(0)]],
+    precio_costo: [null as number | null],
+    unidad: ['unidad']
   });
 
   async ngOnInit() {
@@ -116,7 +130,7 @@ export class ProductosComponent implements OnInit {
 
   editar(p: Producto) {
     this.productoEdit = p;
-    this.form.patchValue({ nombre: p.nombre, precio: p.precio });
+    this.form.patchValue({ nombre: p.nombre, precio: p.precio, precio_costo: p.precio_costo ?? null, unidad: p.unidad ?? 'unidad' });
     this.mostrarForm = true;
   }
 
@@ -131,11 +145,17 @@ export class ProductosComponent implements OnInit {
     this.guardando.set(true);
     try {
       const val = this.form.value;
+      const payload: Partial<Producto> = {
+        nombre: val.nombre!,
+        precio: val.precio!,
+        ...(val.precio_costo != null && { precio_costo: val.precio_costo }),
+        unidad: val.unidad || 'unidad'
+      };
       if (this.productoEdit) {
-        await this.svc.actualizar(this.productoEdit.id, { nombre: val.nombre!, precio: val.precio! });
+        await this.svc.actualizar(this.productoEdit.id, payload);
         this.msg.add({ severity: 'success', summary: 'Actualizado', detail: val.nombre! });
       } else {
-        await this.svc.crear({ nombre: val.nombre!, precio: val.precio!, activo: true });
+        await this.svc.crear({ ...payload, activo: true });
         this.msg.add({ severity: 'success', summary: 'Creado', detail: val.nombre! });
       }
       this.cerrarForm();
