@@ -7,6 +7,7 @@ import { MovimientosService } from '../../../core/services/movimientos.service';
 import { ProductosService } from '../../../core/services/productos.service';
 import { StorageService } from '../../../core/services/storage.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { InventarioService } from '../../../core/services/inventario.service';
 import { SaldoCliente } from '../../../core/models/cliente.model';
 import { Movimiento } from '../../../core/models/movimiento.model';
 import { Producto } from '../../../core/models/producto.model';
@@ -142,12 +143,19 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
             </div>
             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
               @for (p of productos(); track p.id) {
-                <button (click)="compraRapida(p)" [disabled]="procesando()"
+                <button (click)="compraRapida(p)"
+                        [disabled]="procesando() || (estaTrackeado(p) && (p.stock_actual ?? 0) <= 0)"
                         class="flex flex-col items-center justify-center bg-zinc-800
                                hover:bg-indigo-600 border border-zinc-700 hover:border-indigo-500
                                rounded-xl p-3 transition-all active:scale-95 disabled:opacity-50 cursor-pointer">
                   <span class="text-white font-medium text-sm">{{ p.nombre }}</span>
                   <span class="text-indigo-300 text-xs mt-0.5">{{ p.precio | currency:'COP':'$ ':'1.0-0' }}</span>
+                  @if (estaTrackeado(p)) {
+                    <span class="text-xs mt-0.5 font-semibold"
+                          [style]="(p.stock_actual ?? 0) > 0 ? 'color:#4ade80' : 'color:#f87171'">
+                      {{ (p.stock_actual ?? 0) > 0 ? (p.stock_actual + ' disp.') : 'Sin stock' }}
+                    </span>
+                  }
                 </button>
               }
             </div>
@@ -235,7 +243,15 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
                 <div class="product-row" [class.activo]="(carrito()[p.id] ?? 0) > 0">
                   <div class="min-w-0 flex-1">
                     <p class="text-white text-sm font-medium truncate">{{ p.nombre }}</p>
-                    <p class="text-indigo-400 text-xs">{{ p.precio | currency:'COP':'$ ':'1.0-0' }}</p>
+                    <div class="flex items-center gap-2">
+                      <p class="text-indigo-400 text-xs">{{ p.precio | currency:'COP':'$ ':'1.0-0' }}</p>
+                      @if (estaTrackeado(p)) {
+                        <span class="text-xs font-semibold"
+                              [style]="(p.stock_actual ?? 0) > 0 ? 'color:#4ade80' : 'color:#f87171'">
+                          · {{ (p.stock_actual ?? 0) > 0 ? (p.stock_actual + ' en stock') : 'Sin stock' }}
+                        </span>
+                      }
+                    </div>
                   </div>
                   <div class="flex items-center gap-2 shrink-0 ml-3">
                     <button class="qty-btn" (click)="cambiarQty(p.id, -1)"
@@ -243,7 +259,8 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
                     <span class="text-white font-bold text-sm w-5 text-center">
                       {{ carrito()[p.id] ?? 0 }}
                     </span>
-                    <button class="qty-btn" (click)="cambiarQty(p.id, 1)">+</button>
+                    <button class="qty-btn" (click)="cambiarQty(p.id, 1)"
+                            [disabled]="estaTrackeado(p) && (carrito()[p.id] ?? 0) >= (p.stock_actual ?? 0)">+</button>
                     @if ((carrito()[p.id] ?? 0) > 0) {
                       <span class="text-zinc-400 text-xs w-20 text-right">
                         = {{ p.precio * (carrito()[p.id] ?? 0) | currency:'COP':'$ ':'1.0-0' }}
@@ -356,6 +373,7 @@ export class ClienteDetalleComponent implements OnInit {
   private productosSvc = inject(ProductosService);
   private storageSvc = inject(StorageService);
   private auth = inject(AuthService);
+  private invSvc = inject(InventarioService);
   private msg = inject(MessageService);
   private confirm = inject(ConfirmationService);
   private fb = inject(FormBuilder);
@@ -459,7 +477,21 @@ export class ClienteDetalleComponent implements OnInit {
     this.fotoAbono = null;
   }
 
+  estaTrackeado(p: Producto): boolean {
+    return !!(p.precio_costo && p.precio_costo > 0);
+  }
+
   cambiarQty(productoId: string, delta: number) {
+    if (delta > 0) {
+      const prod = this.productos().find(p => p.id === productoId);
+      if (prod && this.estaTrackeado(prod)) {
+        const enCarrito = this.carrito()[productoId] ?? 0;
+        if (enCarrito >= (prod.stock_actual ?? 0)) {
+          this.msg.add({ severity: 'warn', summary: 'Sin stock', detail: `${prod.nombre} no tiene más unidades disponibles` });
+          return;
+        }
+      }
+    }
     const actual = this.carrito()[productoId] ?? 0;
     this.carrito.update(c => ({ ...c, [productoId]: Math.max(0, actual + delta) }));
   }
@@ -475,11 +507,18 @@ export class ClienteDetalleComponent implements OnInit {
   }
 
   async compraRapida(producto: Producto) {
+    if (this.estaTrackeado(producto) && (producto.stock_actual ?? 0) <= 0) {
+      this.msg.add({ severity: 'warn', summary: 'Sin stock', detail: `${producto.nombre} no tiene unidades disponibles` });
+      return;
+    }
     const userId = this.auth.user()?.id;
     if (!userId) return;
     this.procesando.set(true);
     try {
       await this.movSvc.compraRapida(this.id(), producto.nombre, producto.precio, userId);
+      if (this.estaTrackeado(producto)) {
+        await this.invSvc.registrarSalida({ producto_id: producto.id, cantidad: 1, precio_unit: producto.precio, fecha: new Date().toISOString() });
+      }
       this.msg.add({ severity: 'success', summary: producto.nombre, detail: 'Registrado' });
       await this.cargar(this.id());
     } catch {
@@ -506,6 +545,12 @@ export class ClienteDetalleComponent implements OnInit {
         created_by: this.auth.user()?.id,
         fecha: this.fechaCompra ? new Date(this.fechaCompra).toISOString() : new Date().toISOString()
       });
+      // Registrar salida en inventario para productos trackeados
+      const fecha = this.fechaCompra ? new Date(this.fechaCompra).toISOString() : new Date().toISOString();
+      const salidas = this.productos()
+        .filter(p => (this.carrito()[p.id] ?? 0) > 0 && this.estaTrackeado(p))
+        .map(p => this.invSvc.registrarSalida({ producto_id: p.id, cantidad: this.carrito()[p.id], precio_unit: p.precio, fecha }));
+      await Promise.allSettled(salidas);
       this.msg.add({ severity: 'success', summary: 'Compra registrada',
                      detail: this.descripcionCompra() });
       this.cerrarCompra();

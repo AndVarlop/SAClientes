@@ -74,6 +74,10 @@ export class InventarioService {
     if (stockErr) throw stockErr;
   }
 
+  async decrementarStock(productoId: string, cantidad: number) {
+    await this.sb.rpc('incrementar_stock', { p_id: productoId, p_delta: -cantidad });
+  }
+
   async eliminarMovimiento(id: string, tipo: 'ENTRADA' | 'SALIDA', productoId: string, cantidad: number) {
     const { error } = await this.sb.from('movimientos_inv').delete().eq('id', id);
     if (error) throw error;

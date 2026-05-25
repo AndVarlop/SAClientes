@@ -6,6 +6,7 @@ import { MovimientosService } from '../../../core/services/movimientos.service';
 import { ProductosService } from '../../../core/services/productos.service';
 import { StorageService } from '../../../core/services/storage.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { InventarioService } from '../../../core/services/inventario.service';
 import { SaldoCliente } from '../../../core/models/cliente.model';
 import { Movimiento } from '../../../core/models/movimiento.model';
 import { Producto } from '../../../core/models/producto.model';
@@ -337,6 +338,7 @@ export class RegistrarMovimientoComponent implements OnInit {
   private productosSvc = inject(ProductosService);
   private storageSvc = inject(StorageService);
   private auth = inject(AuthService);
+  private invSvc = inject(InventarioService);
   private msg = inject(MessageService);
   private confirm = inject(ConfirmationService);
   private fb = inject(FormBuilder);
@@ -438,7 +440,21 @@ export class RegistrarMovimientoComponent implements OnInit {
   }
   cerrarAbono() { this.mostrarAbono = false; this.formAbono.reset(); this.fotoAbono = null; }
 
+  estaTrackeado(p: Producto): boolean {
+    return !!(p.precio_costo && p.precio_costo > 0);
+  }
+
   cambiarQty(productoId: string, delta: number) {
+    if (delta > 0) {
+      const prod = this.productos().find(p => p.id === productoId);
+      if (prod && this.estaTrackeado(prod)) {
+        const enCarrito = this.carrito()[productoId] ?? 0;
+        if (enCarrito >= (prod.stock_actual ?? 0)) {
+          this.msg.add({ severity: 'warn', summary: 'Sin stock', detail: `${prod.nombre} no tiene más unidades disponibles` });
+          return;
+        }
+      }
+    }
     const actual = this.carrito()[productoId] ?? 0;
     this.carrito.update(c => ({ ...c, [productoId]: Math.max(0, actual + delta) }));
   }
@@ -451,12 +467,19 @@ export class RegistrarMovimientoComponent implements OnInit {
   }
 
   async compraRapida(producto: Producto) {
+    if (this.estaTrackeado(producto) && (producto.stock_actual ?? 0) <= 0) {
+      this.msg.add({ severity: 'warn', summary: 'Sin stock', detail: `${producto.nombre} no tiene unidades disponibles` });
+      return;
+    }
     const id = this.cliente()?.id;
     const userId = this.auth.user()?.id;
     if (!id || !userId) return;
     this.procesando.set(true);
     try {
       await this.movSvc.compraRapida(id, producto.nombre, producto.precio, userId);
+      if (this.estaTrackeado(producto)) {
+        await this.invSvc.registrarSalida({ producto_id: producto.id, cantidad: 1, precio_unit: producto.precio, fecha: new Date().toISOString() });
+      }
       this.msg.add({ severity: 'success', summary: producto.nombre, detail: 'Registrado' });
       await this.recargar();
     } catch {
@@ -483,6 +506,11 @@ export class RegistrarMovimientoComponent implements OnInit {
         created_by: this.auth.user()?.id,
         fecha: this.fechaCompra ? new Date(this.fechaCompra).toISOString() : new Date().toISOString()
       });
+      const fecha = this.fechaCompra ? new Date(this.fechaCompra).toISOString() : new Date().toISOString();
+      const salidas = this.productos()
+        .filter(p => (this.carrito()[p.id] ?? 0) > 0 && this.estaTrackeado(p))
+        .map(p => this.invSvc.registrarSalida({ producto_id: p.id, cantidad: this.carrito()[p.id], precio_unit: p.precio, fecha }));
+      await Promise.allSettled(salidas);
       this.msg.add({ severity: 'success', summary: 'Compra registrada', detail: this.descripcionCompra() });
       this.cerrarCompra();
       await this.recargar();

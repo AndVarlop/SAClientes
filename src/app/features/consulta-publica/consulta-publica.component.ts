@@ -119,7 +119,12 @@ import { SolicitudPago } from '../../core/services/solicitudes-pago.service';
                   <div class="flex items-center justify-between">
                     <div>
                       <p class="text-white font-semibold">{{ c.nombre }}</p>
-                      <p class="text-zinc-500 text-xs mt-0.5">{{ c.telefono || 'Sin teléfono' }}</p>
+                      <p class="text-zinc-500 text-xs mt-0.5 flex items-center gap-1">
+                        @if (c.telefono) {
+                          <i class="pi pi-lock text-zinc-600" style="font-size:9px"></i>
+                          {{ maskTelefono(c.telefono) }}
+                        } @else { Sin teléfono }
+                      </p>
                     </div>
                     <div class="text-right">
                       <p class="font-bold"
@@ -438,6 +443,49 @@ import { SolicitudPago } from '../../core/services/solicitudes-pago.service';
         </p>
       </div>
     </div>
+
+    <!-- ── PIN Verification overlay ── -->
+    @if (pinVisible) {
+      <div class="fixed inset-0 z-50 flex items-center justify-center px-4"
+           style="background:rgba(0,0,0,0.75); backdrop-filter:blur(6px)">
+        <div style="background:#18181b; border:1px solid #27272a; border-radius:24px;
+                    padding:32px; width:min(90vw,360px); animation:scaleIn 0.2s cubic-bezier(0.34,1.56,0.64,1) both">
+
+          <!-- Icon -->
+          <div style="width:56px;height:56px;background:rgb(99 102 241/0.12);border-radius:18px;
+                      display:flex;align-items:center;justify-content:center;margin:0 auto 18px">
+            <i class="pi pi-lock" style="color:#818cf8;font-size:22px"></i>
+          </div>
+
+          <p class="text-white font-bold text-xl text-center">Verificación</p>
+          <p class="text-zinc-400 text-sm text-center mt-2 mb-6">
+            Ingresa los <span class="text-white font-semibold">últimos 4 dígitos</span>
+            de tu número de teléfono para continuar
+          </p>
+
+          <!-- PIN input -->
+          <input [(ngModel)]="pinInput" type="tel" inputmode="numeric" maxlength="4"
+                 class="search-input text-center text-3xl font-bold tracking-[0.4em] mb-3"
+                 style="letter-spacing:0.4em; padding-left:0; padding-right:0"
+                 placeholder="····"
+                 (keyup.enter)="verificarPin()" />
+
+          @if (pinError()) {
+            <p class="text-red-400 text-sm text-center mb-3">
+              <i class="pi pi-times-circle mr-1"></i>{{ pinError() }}
+            </p>
+          }
+
+          <button (click)="verificarPin()" class="search-btn" style="width:100%;justify-content:center;margin-bottom:10px">
+            <i class="pi pi-arrow-right"></i> Verificar
+          </button>
+          <button (click)="pinVisible = false; clientePendientePin = null"
+                  style="width:100%;background:transparent;border:none;color:#52525b;font-size:13px;cursor:pointer;padding:6px">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    }
   `
 })
 export class ConsultaPublicaComponent {
@@ -481,6 +529,12 @@ export class ConsultaPublicaComponent {
     });
   }
 
+  // PIN verification
+  pinVisible = false;
+  pinInput = '';
+  pinError = signal('');
+  clientePendientePin: SaldoCliente | null = null;
+
   // Payment state
   tipoPago: 'TOTAL' | 'ABONO' = 'TOTAL';
   montoPago = '';
@@ -504,7 +558,36 @@ export class ConsultaPublicaComponent {
     }
   }
 
-  async seleccionar(c: SaldoCliente) {
+  maskTelefono(tel?: string): string {
+    if (!tel) return 'Sin teléfono';
+    return tel.length > 3 ? tel.slice(0, -3) + '***' : '***';
+  }
+
+  seleccionar(c: SaldoCliente) {
+    if (c.telefono) {
+      this.clientePendientePin = c;
+      this.pinInput = '';
+      this.pinError.set('');
+      this.pinVisible = true;
+    } else {
+      this.seleccionarConfirmado(c);
+    }
+  }
+
+  verificarPin() {
+    const c = this.clientePendientePin;
+    if (!c?.telefono) return;
+    const digits = c.telefono.replace(/\D/g, '');
+    if (this.pinInput.trim() === digits.slice(-4)) {
+      this.pinVisible = false;
+      this.pinError.set('');
+      this.seleccionarConfirmado(c);
+    } else {
+      this.pinError.set('Código incorrecto. Intenta de nuevo.');
+    }
+  }
+
+  async seleccionarConfirmado(c: SaldoCliente) {
     this.clienteSeleccionado.set(c);
     this.detalleAbierto = null;
     this.tipoPago = 'TOTAL';
