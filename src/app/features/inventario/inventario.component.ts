@@ -14,6 +14,7 @@ import { InputTextModule } from 'primeng/inputtext';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { SelectModule } from 'primeng/select';
 import { TextareaModule } from 'primeng/textarea';
+import { ChartModule } from 'primeng/chart';
 
 type Tab = 'productos' | 'movimientos' | 'ganancias';
 type ModoMov = 'ENTRADA' | 'SALIDA';
@@ -23,7 +24,7 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
   standalone: true,
   imports: [CurrencyPipe, DatePipe, TitleCasePipe, FormsModule, ReactiveFormsModule,
     ButtonModule, DialogModule, InputTextModule, InputNumberModule,
-    SelectModule, TextareaModule],
+    SelectModule, TextareaModule, ChartModule],
   styles: [`
     .tab-btn {
       padding: 8px 18px; border-radius: 20px; font-size: 13px; font-weight: 600;
@@ -76,7 +77,6 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
       font-size: 14px; outline: none; transition: border-color 0.2s; color-scheme: dark;
     }
     .fecha-input:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgb(99 102 241/0.2); }
-    /* ── Dialog extras ── */
     .chip-sel {
       padding: 5px 13px; border-radius: 20px; font-size: 12px; font-weight: 600;
       border: 1px solid #27272a; background: transparent; color: #71717a;
@@ -108,6 +108,18 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
       width: 44px; height: 44px; border-radius: 12px; display: flex;
       align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0;
     }
+    .pag-btn {
+      padding: 6px 14px; border-radius: 8px; background: #27272a; border: 1px solid #3f3f46;
+      color: #a1a1aa; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.15s;
+    }
+    .pag-btn:hover:not(:disabled) { border-color: #6366f1; color: white; }
+    .pag-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .week-nav-btn {
+      width: 32px; height: 32px; border-radius: 9px; background: #27272a; border: 1px solid #3f3f46;
+      color: #a1a1aa; cursor: pointer; display: flex; align-items: center; justify-content:center;
+      font-size: 13px; font-weight: 700; transition: all 0.15s; flex-shrink: 0;
+    }
+    .week-nav-btn:hover { border-color: #6366f1; color: white; }
   `],
   template: `
     <div class="p-5 md:p-8 max-w-4xl mx-auto">
@@ -170,6 +182,9 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
                             [class]="(p.stock_actual ?? 0) > 3 ? 'stock-ok' : (p.stock_actual ?? 0) > 0 ? 'stock-low' : 'stock-zero'">
                         {{ p.stock_actual ?? 0 }} {{ p.unidad ?? 'u' }}{{ (p.stock_actual ?? 0) !== 1 ? 's' : '' }}
                       </span>
+                      @if (p.en_promocion) {
+                        <span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;background:rgb(249 115 22/0.15);color:#fb923c">OFERTA</span>
+                      }
                       @if (!p.activo) {
                         <span style="font-size:11px; color:#52525b">Inactivo</span>
                       }
@@ -181,7 +196,12 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
                       } @else {
                         <span class="text-zinc-500">Costo: <span class="text-white">{{ p.precio_costo | currency:'COP':'$ ':'1.0-0' }}</span></span>
                       }
-                      <span class="text-zinc-500">Venta: <span class="text-green-400">{{ p.precio | currency:'COP':'$ ':'1.0-0' }}</span></span>
+                      @if (p.en_promocion && p.precio_promocion) {
+                        <span class="text-zinc-500">Oferta: <span class="text-orange-400 font-bold">{{ p.precio_promocion | currency:'COP':'$ ':'1.0-0' }}</span></span>
+                        <span class="text-zinc-500">Normal: <span class="text-zinc-400 line-through">{{ p.precio | currency:'COP':'$ ':'1.0-0' }}</span></span>
+                      } @else {
+                        <span class="text-zinc-500">Venta: <span class="text-green-400">{{ p.precio | currency:'COP':'$ ':'1.0-0' }}</span></span>
+                      }
                       <span class="text-zinc-500">Margen: <span class="text-indigo-400">{{ margen(p) }}</span></span>
                     </div>
                   </div>
@@ -200,7 +220,7 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
 
         <!-- ── TAB: MOVIMIENTOS ── -->
         @if (tab() === 'movimientos') {
-          <div class="flex gap-2 mb-5">
+          <div class="flex gap-2 mb-4">
             <button class="modo-btn" [class.modo-entrada]="modoMov() === 'ENTRADA'"
                     (click)="cambiarModo('ENTRADA')">
               <i class="pi pi-arrow-down mr-1.5"></i>Entradas (compras)
@@ -211,14 +231,58 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
             </button>
           </div>
 
+          <!-- Filtro semana / fechas -->
+          <div style="background:#18181b;border:1px solid #27272a;border-radius:14px;padding:14px 16px;margin-bottom:16px">
+            <div class="flex items-center gap-2 mb-3">
+              <button class="week-nav-btn" (click)="semAnterior()">←</button>
+              <div class="flex-1 text-center">
+                <span class="text-white font-semibold text-sm">{{ semanaLabel() }}</span>
+                @if (usandoFiltroCustom()) {
+                  <span style="font-size:10px;margin-left:6px;padding:1px 8px;border-radius:20px;
+                               background:rgb(99 102 241/0.15);color:#818cf8">custom</span>
+                }
+              </div>
+              <button class="week-nav-btn" (click)="semSiguiente()">→</button>
+              @if (semanaOffset() !== 0 || usandoFiltroCustom()) {
+                <button (click)="semActual()"
+                        style="padding:4px 12px;border-radius:8px;background:rgb(99 102 241/0.1);
+                               border:1px solid rgb(99 102 241/0.3);color:#818cf8;cursor:pointer;
+                               font-size:12px;font-weight:600;white-space:nowrap;transition:all 0.15s">
+                  Hoy
+                </button>
+              }
+            </div>
+            <div class="flex gap-2 items-center">
+              <input type="date" class="fecha-input" style="flex:1;font-size:13px;padding:8px 10px"
+                     [value]="fechaDesdeStr()"
+                     (change)="fechaDesdeStr.set($any($event.target).value)" />
+              <span class="text-zinc-600 text-xs shrink-0">→</span>
+              <input type="date" class="fecha-input" style="flex:1;font-size:13px;padding:8px 10px"
+                     [value]="fechaHastaStr()"
+                     (change)="fechaHastaStr.set($any($event.target).value)" />
+              <button (click)="aplicarFiltroCustom()"
+                      [disabled]="!fechaDesdeStr() || !fechaHastaStr()"
+                      [style.opacity]="!fechaDesdeStr() || !fechaHastaStr() ? '0.4' : '1'"
+                      style="padding:8px 14px;border-radius:9px;background:rgb(99 102 241/0.1);
+                             border:1px solid rgb(99 102 241/0.3);color:#818cf8;cursor:pointer;
+                             font-size:12px;font-weight:600;white-space:nowrap;transition:all 0.15s">
+                Aplicar
+              </button>
+            </div>
+          </div>
+
           <div class="card-dark">
-            <p class="text-white font-semibold text-sm mb-4">
-              Historial de {{ modoMov() === 'ENTRADA' ? 'entradas' : 'salidas' }}
-            </p>
+            <div class="flex items-center justify-between mb-4">
+              <p class="text-white font-semibold text-sm">
+                {{ modoMov() === 'ENTRADA' ? 'Entradas' : 'Salidas' }}
+              </p>
+              <span class="text-zinc-500 text-xs">{{ movimientosFiltrados().length }} registros</span>
+            </div>
+
             @if (movimientosFiltrados().length === 0) {
-              <p class="text-zinc-500 text-sm text-center py-8">Sin registros</p>
+              <p class="text-zinc-500 text-sm text-center py-8">Sin registros en este periodo</p>
             } @else {
-              @for (m of movimientosFiltrados(); track m.id) {
+              @for (m of movimientosPaginados(); track m.id) {
                 <div class="mov-row">
                   <div class="flex items-center gap-3 min-w-0 flex-1">
                     <div class="mov-dot"
@@ -256,12 +320,36 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
                   </div>
                 </div>
               }
+
+              <!-- Paginación movimientos -->
+              @if (totalPagsMov() > 1) {
+                <div class="flex items-center justify-between pt-3 mt-3 border-t border-zinc-800">
+                  <button class="pag-btn" (click)="prevPagMov()" [disabled]="pagMov() === 1">← Anterior</button>
+                  <span class="text-zinc-500 text-xs">
+                    Pág {{ pagMov() }} de {{ totalPagsMov() }}
+                  </span>
+                  <button class="pag-btn" (click)="nextPagMov()" [disabled]="pagMov() >= totalPagsMov()">Siguiente →</button>
+                </div>
+              }
             }
           </div>
         }
 
         <!-- ── TAB: GANANCIAS ── -->
         @if (tab() === 'ganancias') {
+
+          <!-- Gráfica 3 semanas -->
+          <div style="background:#18181b;border:1px solid #27272a;border-radius:16px;padding:20px;margin-bottom:20px">
+            <p class="text-white font-semibold text-sm mb-4">
+              <i class="pi pi-chart-bar text-indigo-400 mr-1.5"></i>
+              Comparativa semanal
+            </p>
+            <div style="height:240px">
+              <p-chart type="bar" [data]="chartData()" [options]="chartOptions" height="240" />
+            </div>
+          </div>
+
+          <!-- Stats globales -->
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
             <div class="stat-inv">
               <p class="text-zinc-500 text-xs uppercase tracking-wider font-medium mb-1">Total invertido</p>
@@ -284,13 +372,17 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
             </div>
           </div>
 
+          <!-- Desglose por producto -->
           <div class="card-dark">
-            <p class="text-white font-semibold text-sm mb-4">Desglose por producto</p>
+            <div class="flex items-center justify-between mb-4">
+              <p class="text-white font-semibold text-sm">Desglose por producto</p>
+              <span class="text-zinc-500 text-xs">{{ statsProductos().length }} productos</span>
+            </div>
             @if (statsProductos().length === 0) {
               <p class="text-zinc-500 text-sm text-center py-6">Sin datos aún</p>
             } @else {
               <div class="flex flex-col gap-2">
-                @for (s of statsProductos(); track s.nombre) {
+                @for (s of statsProductosPaginados(); track s.nombre) {
                   <div class="gain-row">
                     <div class="min-w-0 flex-1">
                       <p class="text-white font-medium text-sm">{{ s.nombre }}</p>
@@ -308,6 +400,14 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
                   </div>
                 }
               </div>
+              <!-- Paginación stats -->
+              @if (totalPagsStats() > 1) {
+                <div class="flex items-center justify-between pt-3 mt-3 border-t border-zinc-800">
+                  <button class="pag-btn" (click)="prevPagStats()" [disabled]="pagStats() === 1">← Anterior</button>
+                  <span class="text-zinc-500 text-xs">Pág {{ pagStats() }} de {{ totalPagsStats() }}</span>
+                  <button class="pag-btn" (click)="nextPagStats()" [disabled]="pagStats() >= totalPagsStats()">Siguiente →</button>
+                </div>
+              }
             }
           </div>
         }
@@ -338,14 +438,12 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
 
       <form [formGroup]="formProd" class="flex flex-col gap-4 pt-1">
 
-        <!-- Nombre -->
         <div class="flex flex-col gap-1.5">
           <label class="text-zinc-300 text-sm font-medium">Nombre *</label>
           <input pInputText formControlName="nombre"
                  placeholder="Ej: Oreo, Coca-Cola, Snickers..." class="w-full" />
         </div>
 
-        <!-- Precios -->
         <div class="grid grid-cols-2 gap-3">
           <div class="flex flex-col gap-1.5">
             <label class="text-zinc-400 text-xs font-semibold uppercase tracking-wide flex items-center gap-1">
@@ -363,13 +461,10 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
           </div>
         </div>
 
-        <!-- Preview de costo/ganancia -->
         @if (formProd.value.precio_costo && formProd.value.precio) {
           <div style="background:linear-gradient(135deg,rgb(99 102 241/0.08),rgb(99 102 241/0.04));
                       border:1px solid rgb(99 102 241/0.2); border-radius:12px; padding:14px 16px;">
-
             @if (formProd.value.unidad === 'paquete' && (formProd.value.unidades_por_paquete ?? 0) > 1) {
-              <!-- Desglose paquete -->
               <div class="flex flex-col gap-2 text-xs mb-3 pb-3" style="border-bottom:1px solid rgb(99 102 241/0.15)">
                 <div class="flex justify-between">
                   <span class="text-zinc-500">Costo paquete</span>
@@ -385,7 +480,6 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
                 </div>
               </div>
             }
-
             <div class="flex items-center justify-between">
               <span class="text-zinc-400 text-xs">Ganancia por unidad</span>
               <span class="text-indigo-300 text-xs font-bold">{{ margenForm() }} markup</span>
@@ -396,7 +490,6 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
           </div>
         }
 
-        <!-- Unidad -->
         <div class="flex flex-col gap-1.5">
           <label class="text-zinc-300 text-sm font-medium">Tipo de entrada</label>
           <div class="flex gap-2">
@@ -410,7 +503,6 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
           </div>
         </div>
 
-        <!-- Unidades por paquete (solo si paquete) -->
         @if (formProd.value.unidad === 'paquete') {
           <div class="flex flex-col gap-1.5">
             <label class="text-zinc-300 text-sm font-medium flex items-center gap-1.5">
@@ -461,7 +553,6 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
 
       <form [formGroup]="formMov" class="flex flex-col gap-4 pt-1">
 
-        <!-- Modo toggle dentro del dialog -->
         <div class="flex gap-2">
           <button type="button" class="modo-btn" [class.modo-entrada]="modoMov() === 'ENTRADA'"
                   (click)="cambiarModo('ENTRADA')">
@@ -473,7 +564,6 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
           </button>
         </div>
 
-        <!-- Producto selector -->
         <div class="flex flex-col gap-1.5">
           <label class="text-zinc-300 text-sm font-medium">Producto *</label>
           <p-select [options]="productosActivos()" formControlName="producto_id"
@@ -483,7 +573,6 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
                     (onChange)="onProductoMov($event.value)" />
         </div>
 
-        <!-- Product preview card -->
         @if (productoMovActual()) {
           <div class="prod-preview">
             <div class="min-w-0 flex-1">
@@ -517,7 +606,6 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
           </div>
         }
 
-        <!-- Cantidad con +/- -->
         <div class="flex flex-col gap-1.5">
           <label class="text-zinc-300 text-sm font-medium">Cantidad *</label>
           <div class="flex items-center gap-2">
@@ -528,7 +616,6 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
           </div>
         </div>
 
-        <!-- Precio unitario -->
         <div class="flex flex-col gap-1.5">
           <label class="text-zinc-300 text-sm font-medium">
             Precio {{ modoMov() === 'ENTRADA' ? 'costo' : 'venta' }} unitario *
@@ -537,7 +624,6 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
                          locale="es-CO" placeholder="$ 0" styleClass="w-full" />
         </div>
 
-        <!-- Total -->
         @if (formMov.value.cantidad && formMov.value.precio_unit) {
           <div class="total-preview">
             <p class="text-zinc-400 text-xs mb-0.5">Total del movimiento</p>
@@ -551,7 +637,6 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
           </div>
         }
 
-        <!-- Solo SALIDA: cargar a cliente -->
         @if (modoMov() === 'SALIDA') {
           <div class="flex flex-col gap-1.5">
             <label class="text-zinc-300 text-sm font-medium flex items-center gap-1.5">
@@ -577,7 +662,6 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
           </div>
         }
 
-        <!-- Fecha -->
         <div class="flex flex-col gap-1.5">
           <label class="text-zinc-300 text-sm font-medium flex items-center gap-1.5">
             <i class="pi pi-calendar text-zinc-400"></i> Fecha y hora
@@ -586,7 +670,6 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
                  [ngModelOptions]="{standalone: true}" />
         </div>
 
-        <!-- Nota -->
         <div class="flex flex-col gap-1.5">
           <label class="text-zinc-300 text-sm font-medium">Nota</label>
           <input pInputText formControlName="nota" placeholder="Opcional..." class="w-full" />
@@ -630,11 +713,78 @@ export class InventarioComponent implements OnInit {
   clientes = signal<SaldoCliente[]>([]);
 
   unidades = ['unidad', 'paquete'];
+  readonly PAGE_SIZE = 10;
+
+  // ── Week / date filter ──
+  semanaOffset = signal(0);
+  usandoFiltroCustom = signal(false);
+  fechaDesdeStr = signal('');
+  fechaHastaStr = signal('');
+  pagMov = signal(1);
+  pagStats = signal(1);
 
   productosActivos = computed(() => this.productos().filter(p => p.activo));
 
-  movimientosFiltrados = computed(() =>
-    this.movimientos().filter(m => m.tipo === this.modoMov())
+  private getLunes(offsetSemanas = 0): Date {
+    const d = new Date();
+    const day = d.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    const lunes = new Date(d);
+    lunes.setDate(d.getDate() + diff + offsetSemanas * 7);
+    lunes.setHours(0, 0, 0, 0);
+    return lunes;
+  }
+
+  semanaInicio = computed(() => this.getLunes(this.semanaOffset()));
+
+  semanaFin = computed(() => {
+    const fin = new Date(this.semanaInicio());
+    fin.setDate(fin.getDate() + 6);
+    fin.setHours(23, 59, 59, 999);
+    return fin;
+  });
+
+  semanaLabel = computed(() => {
+    const fmt = (d: Date) => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+    if (this.usandoFiltroCustom()) {
+      return this.fechaDesdeStr() && this.fechaHastaStr()
+        ? `${this.fechaDesdeStr()} – ${this.fechaHastaStr()}`
+        : 'Rango personalizado';
+    }
+    const ini = this.semanaInicio(), fin = this.semanaFin();
+    if (this.semanaOffset() === 0) return `Esta semana · ${fmt(ini)} – ${fmt(fin)}`;
+    if (this.semanaOffset() === -1) return `Sem. pasada · ${fmt(ini)} – ${fmt(fin)}`;
+    return `${fmt(ini)} – ${fmt(fin)}`;
+  });
+
+  filtroDesde = computed(() => {
+    if (this.usandoFiltroCustom() && this.fechaDesdeStr())
+      return new Date(this.fechaDesdeStr() + 'T00:00:00');
+    return this.semanaInicio();
+  });
+
+  filtroHasta = computed(() => {
+    if (this.usandoFiltroCustom() && this.fechaHastaStr())
+      return new Date(this.fechaHastaStr() + 'T23:59:59');
+    return this.semanaFin();
+  });
+
+  movimientosFiltrados = computed(() => {
+    const desde = this.filtroDesde();
+    const hasta = this.filtroHasta();
+    return this.movimientos().filter(m => {
+      const f = new Date(m.fecha);
+      return m.tipo === this.modoMov() && f >= desde && f <= hasta;
+    });
+  });
+
+  movimientosPaginados = computed(() => {
+    const start = (this.pagMov() - 1) * this.PAGE_SIZE;
+    return this.movimientosFiltrados().slice(start, start + this.PAGE_SIZE);
+  });
+
+  totalPagsMov = computed(() =>
+    Math.max(1, Math.ceil(this.movimientosFiltrados().length / this.PAGE_SIZE))
   );
 
   stats = computed(() => {
@@ -661,6 +811,51 @@ export class InventarioComponent implements OnInit {
       .map(e => ({ ...e, ganancia: e.vendido - e.invertido }))
       .sort((a, b) => b.ganancia - a.ganancia);
   });
+
+  statsProductosPaginados = computed(() => {
+    const start = (this.pagStats() - 1) * this.PAGE_SIZE;
+    return this.statsProductos().slice(start, start + this.PAGE_SIZE);
+  });
+
+  totalPagsStats = computed(() =>
+    Math.max(1, Math.ceil(this.statsProductos().length / this.PAGE_SIZE))
+  );
+
+  chartData = computed(() => {
+    const movs = this.movimientos();
+    const calcSemana = (offsetSem: number) => {
+      const lunes = this.getLunes(offsetSem);
+      const domingo = new Date(lunes);
+      domingo.setDate(lunes.getDate() + 6);
+      domingo.setHours(23, 59, 59, 999);
+      const sm = movs.filter(m => { const f = new Date(m.fecha); return f >= lunes && f <= domingo; });
+      const invertido = sm.filter(m => m.tipo === 'ENTRADA').reduce((s, m) => s + m.cantidad * m.precio_unit, 0);
+      const vendido = sm.filter(m => m.tipo === 'SALIDA').reduce((s, m) => s + m.cantidad * m.precio_unit, 0);
+      return { invertido, vendido, ganancia: vendido - invertido };
+    };
+    const s2 = calcSemana(-2), s1 = calcSemana(-1), s0 = calcSemana(0);
+    return {
+      labels: ['Hace 2 sem', 'Sem. pasada', 'Esta semana'],
+      datasets: [
+        { label: 'Vendido', data: [s2.vendido, s1.vendido, s0.vendido], backgroundColor: 'rgba(34,197,94,0.65)', borderColor: '#22c55e', borderWidth: 1, borderRadius: 6 },
+        { label: 'Invertido', data: [s2.invertido, s1.invertido, s0.invertido], backgroundColor: 'rgba(99,102,241,0.65)', borderColor: '#6366f1', borderWidth: 1, borderRadius: 6 },
+        { label: 'Ganancia', data: [s2.ganancia, s1.ganancia, s0.ganancia], backgroundColor: 'rgba(251,191,36,0.65)', borderColor: '#fbbf24', borderWidth: 1, borderRadius: 6 }
+      ]
+    };
+  });
+
+  chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#a1a1aa', font: { size: 12 } } } },
+    scales: {
+      x: { ticks: { color: '#71717a' }, grid: { color: 'rgba(39,39,42,0.8)' } },
+      y: {
+        ticks: { color: '#71717a', callback: (v: number) => '$ ' + v.toLocaleString('es-CO') },
+        grid: { color: 'rgba(39,39,42,0.8)' }
+      }
+    }
+  };
 
   formProd = this.fb.group({
     nombre: ['', Validators.required],
@@ -696,6 +891,23 @@ export class InventarioComponent implements OnInit {
     }
   }
 
+  // ── Week navigation ──
+  semAnterior() { this.semanaOffset.update(v => v - 1); this.usandoFiltroCustom.set(false); this.pagMov.set(1); }
+  semSiguiente() { this.semanaOffset.update(v => v + 1); this.usandoFiltroCustom.set(false); this.pagMov.set(1); }
+  semActual() { this.semanaOffset.set(0); this.usandoFiltroCustom.set(false); this.fechaDesdeStr.set(''); this.fechaHastaStr.set(''); this.pagMov.set(1); }
+
+  aplicarFiltroCustom() {
+    if (!this.fechaDesdeStr() || !this.fechaHastaStr()) return;
+    this.usandoFiltroCustom.set(true);
+    this.pagMov.set(1);
+  }
+
+  // ── Pagination ──
+  prevPagMov() { if (this.pagMov() > 1) this.pagMov.update(v => v - 1); }
+  nextPagMov() { if (this.pagMov() < this.totalPagsMov()) this.pagMov.update(v => v + 1); }
+  prevPagStats() { if (this.pagStats() > 1) this.pagStats.update(v => v - 1); }
+  nextPagStats() { if (this.pagStats() < this.totalPagsStats()) this.pagStats.update(v => v + 1); }
+
   costoUnitario(p: Producto): number {
     if (!p.precio_costo) return 0;
     if (p.unidad === 'paquete' && (p.unidades_por_paquete ?? 1) > 1) {
@@ -722,6 +934,10 @@ export class InventarioComponent implements OnInit {
     const v = this.formProd.value.precio ?? 0;
     if (!cu) return '0%';
     return ((v - cu) / cu * 100).toFixed(0) + '%';
+  }
+
+  precioEfectivo(p: Producto): number {
+    return p.en_promocion && p.precio_promocion ? p.precio_promocion : p.precio;
   }
 
   private fechaDefault(): string {
@@ -803,6 +1019,7 @@ export class InventarioComponent implements OnInit {
 
   cambiarModo(modo: ModoMov) {
     this.modoMov.set(modo);
+    this.pagMov.set(1);
     const prodId = this.formMov.value.producto_id;
     if (prodId) this.onProductoMov(prodId);
   }
@@ -814,10 +1031,6 @@ export class InventarioComponent implements OnInit {
   decCantidad() {
     const c = this.formMov.value.cantidad ?? 0;
     if (c > 1) this.formMov.patchValue({ cantidad: c - 1 });
-  }
-
-  precioEfectivo(p: Producto): number {
-    return p.en_promocion && p.precio_promocion ? p.precio_promocion : p.precio;
   }
 
   onProductoMov(id: string) {
