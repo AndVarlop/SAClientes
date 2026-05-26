@@ -392,7 +392,7 @@ export class ClienteDetalleComponent implements OnInit {
   cliente = signal<SaldoCliente | null>(null);
   movimientos = signal<Movimiento[]>([]);
   productos = signal<Producto[]>([]);
-  carrito = signal<Record<string, number>>({});
+  carrito = signal<Partial<Record<string, number>>>({});
 
   totalCarrito = computed(() =>
     this.productos().reduce((sum, p) =>
@@ -549,7 +549,7 @@ export class ClienteDetalleComponent implements OnInit {
       const fecha = this.fechaCompra ? new Date(this.fechaCompra).toISOString() : new Date().toISOString();
       const salidas = this.productos()
         .filter(p => (this.carrito()[p.id] ?? 0) > 0 && this.estaTrackeado(p))
-        .map(p => this.invSvc.registrarSalida({ producto_id: p.id, cantidad: this.carrito()[p.id], precio_unit: p.precio, fecha }));
+        .map(p => this.invSvc.registrarSalida({ producto_id: p.id, cantidad: this.carrito()[p.id] ?? 0, precio_unit: p.precio, fecha }));
       await Promise.allSettled(salidas);
       this.msg.add({ severity: 'success', summary: 'Compra registrada',
                      detail: this.descripcionCompra() });

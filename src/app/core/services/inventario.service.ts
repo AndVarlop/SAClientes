@@ -28,12 +28,12 @@ export class InventarioService {
     return (data ?? []) as Producto[];
   }
 
-  async crearProducto(p: { nombre: string; precio_costo: number; precio: number; unidad: string }) {
+  async crearProducto(p: { nombre: string; precio_costo: number; precio: number; unidad: string; unidades_por_paquete?: number | null }) {
     const { error } = await this.sb.from('productos').insert({ ...p, activo: true });
     if (error) throw error;
   }
 
-  async editarProducto(id: string, p: { nombre?: string; precio_costo?: number; precio?: number; unidad?: string }) {
+  async editarProducto(id: string, p: { nombre?: string; precio_costo?: number; precio?: number; unidad?: string; unidades_por_paquete?: number | null }) {
     const { error } = await this.sb.from('productos').update(p).eq('id', id);
     if (error) throw error;
   }

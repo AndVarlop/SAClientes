@@ -8,4 +8,5 @@ export interface Producto {
   precio_costo?: number;
   stock_actual?: number;
   unidad?: string;
+  unidades_por_paquete?: number;
 }

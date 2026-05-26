@@ -1,5 +1,5 @@
 import { Component, computed, inject, signal, OnInit } from '@angular/core';
-import { CurrencyPipe, DatePipe, DecimalPipe } from '@angular/common';
+import { CurrencyPipe, DatePipe, TitleCasePipe } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { InventarioService, MovimientoInv } from '../../core/services/inventario.service';
 import { ClientesService } from '../../core/services/clientes.service';
@@ -21,9 +21,9 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
 @Component({
   selector: 'app-inventario',
   standalone: true,
-  imports: [CurrencyPipe, DatePipe, DecimalPipe, FormsModule, ReactiveFormsModule,
-            ButtonModule, DialogModule, InputTextModule, InputNumberModule,
-            SelectModule, TextareaModule],
+  imports: [CurrencyPipe, DatePipe, TitleCasePipe, FormsModule, ReactiveFormsModule,
+    ButtonModule, DialogModule, InputTextModule, InputNumberModule,
+    SelectModule, TextareaModule],
   styles: [`
     .tab-btn {
       padding: 8px 18px; border-radius: 20px; font-size: 13px; font-weight: 600;
@@ -174,8 +174,13 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
                         <span style="font-size:11px; color:#52525b">Inactivo</span>
                       }
                     </div>
-                    <div class="flex gap-4 text-xs">
-                      <span class="text-zinc-500">Costo: <span class="text-white">{{ p.precio_costo | currency:'COP':'$ ':'1.0-0' }}</span></span>
+                    <div class="flex gap-3 text-xs flex-wrap">
+                      @if (p.unidad === 'paquete' && (p.unidades_por_paquete ?? 1) > 1) {
+                        <span class="text-zinc-500">Paquete: <span class="text-white">{{ p.precio_costo | currency:'COP':'$ ':'1.0-0' }}</span></span>
+                        <span class="text-zinc-500">C/u: <span class="text-amber-300">{{ costoUnitario(p) | currency:'COP':'$ ':'1.0-0' }}</span></span>
+                      } @else {
+                        <span class="text-zinc-500">Costo: <span class="text-white">{{ p.precio_costo | currency:'COP':'$ ':'1.0-0' }}</span></span>
+                      }
                       <span class="text-zinc-500">Venta: <span class="text-green-400">{{ p.precio | currency:'COP':'$ ':'1.0-0' }}</span></span>
                       <span class="text-zinc-500">Margen: <span class="text-indigo-400">{{ margen(p) }}</span></span>
                     </div>
@@ -358,33 +363,65 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
           </div>
         </div>
 
-        <!-- Margen live -->
+        <!-- Preview de costo/ganancia -->
         @if (formProd.value.precio_costo && formProd.value.precio) {
           <div style="background:linear-gradient(135deg,rgb(99 102 241/0.08),rgb(99 102 241/0.04));
-                      border:1px solid rgb(99 102 241/0.2); border-radius:12px; padding:12px 14px;">
+                      border:1px solid rgb(99 102 241/0.2); border-radius:12px; padding:14px 16px;">
+
+            @if (formProd.value.unidad === 'paquete' && (formProd.value.unidades_por_paquete ?? 0) > 1) {
+              <!-- Desglose paquete -->
+              <div class="flex flex-col gap-2 text-xs mb-3 pb-3" style="border-bottom:1px solid rgb(99 102 241/0.15)">
+                <div class="flex justify-between">
+                  <span class="text-zinc-500">Costo paquete</span>
+                  <span class="text-white font-semibold">{{ formProd.value.precio_costo | currency:'COP':'$ ':'1.0-0' }}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-zinc-500">Unidades en paquete</span>
+                  <span class="text-white font-semibold">{{ formProd.value.unidades_por_paquete }}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-amber-400 font-semibold">Costo por unidad</span>
+                  <span class="text-amber-300 font-bold">{{ costoUnitarioForm() | currency:'COP':'$ ':'1.0-0' }}</span>
+                </div>
+              </div>
+            }
+
             <div class="flex items-center justify-between">
               <span class="text-zinc-400 text-xs">Ganancia por unidad</span>
-              <span class="text-indigo-300 text-xs font-bold">{{ margenForm() }} margen</span>
+              <span class="text-indigo-300 text-xs font-bold">{{ margenForm() }} markup</span>
             </div>
             <p class="text-indigo-200 font-bold text-lg mt-0.5">
-              {{ (formProd.value.precio - formProd.value.precio_costo) | currency:'COP':'$ ':'1.0-0' }}
+              {{ (formProd.value.precio - costoUnitarioForm()) | currency:'COP':'$ ':'1.0-0' }}
             </p>
           </div>
         }
 
         <!-- Unidad -->
         <div class="flex flex-col gap-1.5">
-          <label class="text-zinc-300 text-sm font-medium">Unidad</label>
-          <div class="flex gap-2 flex-wrap mb-2">
+          <label class="text-zinc-300 text-sm font-medium">Tipo de entrada</label>
+          <div class="flex gap-2">
             @for (u of unidades; track u) {
-              <button type="button" class="chip-sel"
+              <button type="button" class="chip-sel" style="flex:1; text-align:center"
                       [class.chip-activo]="formProd.value.unidad === u"
-                      (click)="formProd.patchValue({unidad: u})">{{ u }}</button>
+                      (click)="formProd.patchValue({unidad: u, unidades_por_paquete: u === 'unidad' ? null : formProd.value.unidades_por_paquete})">
+                <i [class]="u === 'paquete' ? 'pi pi-th-large mr-1' : 'pi pi-box mr-1'"></i>{{ u | titlecase }}
+              </button>
             }
           </div>
-          <input pInputText formControlName="unidad"
-                 placeholder="O escribe otra..." class="w-full" />
         </div>
+
+        <!-- Unidades por paquete (solo si paquete) -->
+        @if (formProd.value.unidad === 'paquete') {
+          <div class="flex flex-col gap-1.5">
+            <label class="text-zinc-300 text-sm font-medium flex items-center gap-1.5">
+              <i class="pi pi-list text-zinc-400"></i>
+              Unidades por paquete *
+            </label>
+            <p-inputnumber formControlName="unidades_por_paquete"
+                           placeholder="Ej: 12" [min]="1" styleClass="w-full" />
+            <p class="text-zinc-600 text-xs">Cuántas unidades trae cada paquete que compras</p>
+          </div>
+        }
 
       </form>
 
@@ -582,7 +619,7 @@ export class InventarioComponent implements OnInit {
   movimientos = signal<MovimientoInv[]>([]);
   clientes = signal<SaldoCliente[]>([]);
 
-  unidades = ['unidad', 'caja', 'paquete', 'docena', 'bolsa'];
+  unidades = ['unidad', 'paquete'];
 
   productosActivos = computed(() => this.productos().filter(p => p.activo));
 
@@ -619,7 +656,8 @@ export class InventarioComponent implements OnInit {
     nombre: ['', Validators.required],
     precio_costo: [null as number | null, [Validators.required, Validators.min(1)]],
     precio: [null as number | null, [Validators.required, Validators.min(1)]],
-    unidad: ['unidad']
+    unidad: ['unidad'],
+    unidades_por_paquete: [null as number | null]
   });
 
   formMov = this.fb.group({
@@ -631,7 +669,7 @@ export class InventarioComponent implements OnInit {
 
   async ngOnInit() {
     await this.cargar();
-    this.clientesSvc.getAll().then(c => this.clientes.set(c)).catch(() => {});
+    this.clientesSvc.getAll().then(c => this.clientes.set(c)).catch(() => { });
   }
 
   async cargar() {
@@ -648,22 +686,38 @@ export class InventarioComponent implements OnInit {
     }
   }
 
+  costoUnitario(p: Producto): number {
+    if (!p.precio_costo) return 0;
+    if (p.unidad === 'paquete' && (p.unidades_por_paquete ?? 1) > 1) {
+      return p.precio_costo / p.unidades_por_paquete!;
+    }
+    return p.precio_costo;
+  }
+
   margen(p: Producto): string {
-    if (!p.precio_costo) return '0%';
-    return ((p.precio - p.precio_costo) / p.precio_costo * 100).toFixed(0) + '%';
+    const cu = this.costoUnitario(p);
+    if (!cu) return '0%';
+    return ((p.precio - cu) / cu * 100).toFixed(0) + '%';
+  }
+
+  costoUnitarioForm(): number {
+    const c = this.formProd.value.precio_costo ?? 0;
+    const upq = this.formProd.value.unidades_por_paquete;
+    if (this.formProd.value.unidad === 'paquete' && upq && upq > 1) return c / upq;
+    return c;
   }
 
   margenForm(): string {
-    const c = this.formProd.value.precio_costo ?? 0;
+    const cu = this.costoUnitarioForm();
     const v = this.formProd.value.precio ?? 0;
-    if (!c) return '0%';
-    return ((v - c) / c * 100).toFixed(0) + '%';
+    if (!cu) return '0%';
+    return ((v - cu) / cu * 100).toFixed(0) + '%';
   }
 
   private fechaDefault(): string {
     const d = new Date();
     const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
   // ── Productos ──
@@ -679,7 +733,8 @@ export class InventarioComponent implements OnInit {
       nombre: p.nombre,
       precio_costo: p.precio_costo ?? null,
       precio: p.precio,
-      unidad: p.unidad ?? 'unidad'
+      unidad: p.unidad ?? 'unidad',
+      unidades_por_paquete: p.unidades_por_paquete ?? null
     });
     this.mostrarFormProd = true;
   }
@@ -691,11 +746,13 @@ export class InventarioComponent implements OnInit {
     this.guardando.set(true);
     try {
       const val = this.formProd.value;
+      const esPaquete = val.unidad === 'paquete';
       const data = {
         nombre: val.nombre!,
         precio_costo: val.precio_costo!,
         precio: val.precio!,
-        unidad: val.unidad || 'unidad'
+        unidad: val.unidad || 'unidad',
+        unidades_por_paquete: esPaquete ? (val.unidades_por_paquete ?? null) : null
       };
       if (this.prodEdit) await this.svc.editarProducto(this.prodEdit.id, data);
       else await this.svc.crearProducto(data);
