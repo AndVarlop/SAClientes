@@ -40,4 +40,8 @@ export class ProductosService {
   async desactivar(id: string) {
     return this.actualizar(id, { activo: false });
   }
+
+  async togglePromocion(id: string, payload: { en_promocion: boolean; precio_promocion?: number }) {
+    return this.actualizar(id, payload);
+  }
 }

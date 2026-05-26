@@ -487,14 +487,24 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
         @if (productoMovActual()) {
           <div class="prod-preview">
             <div class="min-w-0 flex-1">
-              <p class="text-white font-semibold text-sm">{{ productoMovActual()!.nombre }}</p>
+              <div class="flex items-center gap-2">
+                <p class="text-white font-semibold text-sm">{{ productoMovActual()!.nombre }}</p>
+                @if (productoMovActual()!.en_promocion) {
+                  <span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;background:rgb(249 115 22/0.15);color:#fb923c">OFERTA</span>
+                }
+              </div>
               <div class="flex gap-3 text-xs mt-1">
                 <span class="text-zinc-500">Costo:
                   <span class="text-white">{{ productoMovActual()!.precio_costo | currency:'COP':'$ ':'1.0-0' }}</span>
                 </span>
-                <span class="text-zinc-500">Venta:
-                  <span class="text-green-400">{{ productoMovActual()!.precio | currency:'COP':'$ ':'1.0-0' }}</span>
-                </span>
+                @if (productoMovActual()!.en_promocion && productoMovActual()!.precio_promocion) {
+                  <span class="text-zinc-500">Oferta: <span class="text-orange-400 font-bold">{{ productoMovActual()!.precio_promocion | currency:'COP':'$ ':'1.0-0' }}</span></span>
+                  <span class="text-zinc-500">Normal: <span class="text-zinc-400 line-through">{{ productoMovActual()!.precio | currency:'COP':'$ ':'1.0-0' }}</span></span>
+                } @else {
+                  <span class="text-zinc-500">Venta:
+                    <span class="text-green-400">{{ productoMovActual()!.precio | currency:'COP':'$ ':'1.0-0' }}</span>
+                  </span>
+                }
               </div>
             </div>
             <div class="text-right shrink-0">
@@ -806,11 +816,15 @@ export class InventarioComponent implements OnInit {
     if (c > 1) this.formMov.patchValue({ cantidad: c - 1 });
   }
 
+  precioEfectivo(p: Producto): number {
+    return p.en_promocion && p.precio_promocion ? p.precio_promocion : p.precio;
+  }
+
   onProductoMov(id: string) {
     const prod = this.productos().find(p => p.id === id);
     if (!prod) return;
     this.productoMovActual.set(prod);
-    const precio = this.modoMov() === 'ENTRADA' ? (prod.precio_costo ?? prod.precio) : prod.precio;
+    const precio = this.modoMov() === 'ENTRADA' ? (prod.precio_costo ?? prod.precio) : this.precioEfectivo(prod);
     this.formMov.patchValue({ precio_unit: precio });
   }
 

@@ -19,9 +19,12 @@ import { MessageService } from 'primeng/api';
                        rounded-xl p-3 transition-all active:scale-95 disabled:opacity-50
                        text-left cursor-pointer">
           <span class="text-white font-medium text-sm w-full">{{ p.nombre }}</span>
-          <span class="text-indigo-300 text-xs mt-0.5 w-full">
-            {{ p.precio | currency:'COP':'$ ':'1.0-0' }}
-          </span>
+          @if (p.en_promocion && p.precio_promocion) {
+            <span class="text-orange-300 text-xs font-bold mt-0.5 w-full">🏷 {{ p.precio_promocion | currency:'COP':'$ ':'1.0-0' }}</span>
+            <span class="text-zinc-500 text-xs line-through w-full">{{ p.precio | currency:'COP':'$ ':'1.0-0' }}</span>
+          } @else {
+            <span class="text-indigo-300 text-xs mt-0.5 w-full">{{ p.precio | currency:'COP':'$ ':'1.0-0' }}</span>
+          }
         </button>
       }
     </div>
@@ -43,7 +46,8 @@ export class CompraRapidaComponent {
     if (!userId) return;
     this.procesando.set(true);
     try {
-      await this.movSvc.compraRapida(this.clienteId(), producto.nombre, producto.precio, userId);
+      const precio = producto.en_promocion && producto.precio_promocion ? producto.precio_promocion : producto.precio;
+      await this.movSvc.compraRapida(this.clienteId(), producto.nombre, precio, userId);
       this.msg.add({ severity: 'success', summary: producto.nombre, detail: 'Registrado' });
       this.compraRegistrada.emit();
     } catch {

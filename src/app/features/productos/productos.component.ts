@@ -1,5 +1,5 @@
 import { Component, inject, signal, OnInit } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, ReactiveFormsModule, FormsModule, Validators } from '@angular/forms';
 import { CurrencyPipe } from '@angular/common';
 import { ProductosService } from '../../core/services/productos.service';
 import { Producto } from '../../core/models/producto.model';
@@ -8,12 +8,13 @@ import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
 import { InputTextModule } from 'primeng/inputtext';
 import { InputNumberModule } from 'primeng/inputnumber';
+import { TagModule } from 'primeng/tag';
 
 @Component({
   selector: 'app-productos',
   standalone: true,
-  imports: [ReactiveFormsModule, CurrencyPipe,
-            ButtonModule, DialogModule, InputTextModule, InputNumberModule],
+  imports: [ReactiveFormsModule, FormsModule, CurrencyPipe,
+            ButtonModule, DialogModule, InputTextModule, InputNumberModule, TagModule],
   template: `
     <div class="p-5 md:p-8 max-w-3xl mx-auto">
       <div class="flex items-center justify-between mb-6">
@@ -38,11 +39,23 @@ import { InputNumberModule } from 'primeng/inputnumber';
       } @else {
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
           @for (p of productos(); track p.id) {
-            <div class="card-dark flex flex-col gap-2 group">
+            <div class="card-dark flex flex-col gap-2 group" [class.ring-1]="p.en_promocion" [class.ring-orange-500]="p.en_promocion">
               <div class="flex items-start justify-between">
                 <div>
-                  <p class="text-white font-medium text-sm">{{ p.nombre }}</p>
-                  <p class="text-indigo-400 font-bold">{{ p.precio | currency:'COP':'$ ':'1.0-0' }}</p>
+                  <div class="flex items-center gap-1.5 mb-0.5">
+                    <p class="text-white font-medium text-sm">{{ p.nombre }}</p>
+                    @if (p.en_promocion) {
+                      <p-tag value="OFERTA" severity="warn" styleClass="text-xs px-1 py-0" />
+                    }
+                  </div>
+                  @if (p.en_promocion && p.precio_promocion) {
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-zinc-500 text-xs line-through">{{ p.precio | currency:'COP':'$ ':'1.0-0' }}</span>
+                      <span class="text-orange-400 font-bold text-sm">{{ p.precio_promocion | currency:'COP':'$ ':'1.0-0' }}</span>
+                    </div>
+                  } @else {
+                    <p class="text-indigo-400 font-bold">{{ p.precio | currency:'COP':'$ ':'1.0-0' }}</p>
+                  }
                   @if (p.precio_costo) {
                     <p class="text-zinc-500 text-xs">Costo: {{ p.precio_costo | currency:'COP':'$ ':'1.0-0' }}</p>
                   }
@@ -54,12 +67,20 @@ import { InputNumberModule } from 'primeng/inputnumber';
                           (click)="eliminar(p)"></button>
                 </div>
               </div>
+              <button pButton
+                      [label]="p.en_promocion ? 'Quitar oferta' : 'Poner en oferta'"
+                      [severity]="p.en_promocion ? 'secondary' : 'warn'"
+                      size="small"
+                      [icon]="p.en_promocion ? 'pi pi-times' : 'pi pi-tag'"
+                      (click)="p.en_promocion ? quitarPromocion(p) : abrirPromocion(p)">
+              </button>
             </div>
           }
         </div>
       }
     </div>
 
+    <!-- Dialog producto -->
     <p-dialog [(visible)]="mostrarForm"
               [header]="productoEdit ? 'Editar producto' : 'Nuevo producto'"
               [modal]="true" [style]="{width:'360px'}" [draggable]="false">
@@ -88,6 +109,30 @@ import { InputNumberModule } from 'primeng/inputnumber';
         <button pButton label="Guardar" [loading]="guardando()" (click)="guardar()"></button>
       </ng-template>
     </p-dialog>
+
+    <!-- Dialog promocion -->
+    <p-dialog [(visible)]="mostrarPromocion"
+              header="Poner en oferta"
+              [modal]="true" [style]="{width:'320px'}" [draggable]="false">
+      @if (productoPromo) {
+        <div class="flex flex-col gap-4 pt-2">
+          <p class="text-zinc-300 text-sm">
+            Precio normal:
+            <span class="text-white font-bold">{{ productoPromo.precio | currency:'COP':'$ ':'1.0-0' }}</span>
+          </p>
+          <div class="flex flex-col gap-1.5">
+            <label class="text-zinc-300 text-sm font-medium">Precio promoción *</label>
+            <p-inputnumber [(ngModel)]="precioPromoValue" mode="currency" currency="COP"
+                           locale="es-CO" placeholder="0" styleClass="w-full" />
+          </div>
+        </div>
+      }
+      <ng-template pTemplate="footer">
+        <button pButton label="Cancelar" severity="secondary" (click)="cerrarPromocion()"></button>
+        <button pButton label="Activar oferta" severity="warn" icon="pi pi-tag"
+                [loading]="guardando()" (click)="activarPromocion()"></button>
+      </ng-template>
+    </p-dialog>
   `
 })
 export class ProductosComponent implements OnInit {
@@ -99,8 +144,11 @@ export class ProductosComponent implements OnInit {
   cargando = signal(true);
   guardando = signal(false);
   mostrarForm = false;
+  mostrarPromocion = false;
   productos = signal<Producto[]>([]);
   productoEdit: Producto | null = null;
+  productoPromo: Producto | null = null;
+  precioPromoValue: number | null = null;
 
   form = this.fb.group({
     nombre: ['', Validators.required],
@@ -178,5 +226,45 @@ export class ProductosComponent implements OnInit {
         await this.cargar();
       }
     });
+  }
+
+  abrirPromocion(p: Producto) {
+    this.productoPromo = p;
+    this.precioPromoValue = p.precio_promocion ?? null;
+    this.mostrarPromocion = true;
+  }
+
+  cerrarPromocion() {
+    this.mostrarPromocion = false;
+    this.productoPromo = null;
+    this.precioPromoValue = null;
+  }
+
+  async activarPromocion() {
+    if (!this.productoPromo || !this.precioPromoValue) return;
+    this.guardando.set(true);
+    try {
+      await this.svc.togglePromocion(this.productoPromo.id, {
+        en_promocion: true,
+        precio_promocion: this.precioPromoValue
+      });
+      this.msg.add({ severity: 'warn', summary: 'En oferta', detail: this.productoPromo.nombre });
+      this.cerrarPromocion();
+      await this.cargar();
+    } catch {
+      this.msg.add({ severity: 'error', summary: 'Error', detail: 'No se pudo activar' });
+    } finally {
+      this.guardando.set(false);
+    }
+  }
+
+  async quitarPromocion(p: Producto) {
+    try {
+      await this.svc.togglePromocion(p.id, { en_promocion: false });
+      this.msg.add({ severity: 'info', summary: 'Oferta quitada', detail: p.nombre });
+      await this.cargar();
+    } catch {
+      this.msg.add({ severity: 'error', summary: 'Error', detail: 'No se pudo quitar' });
+    }
   }
 }

@@ -147,9 +147,17 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
                         [disabled]="procesando() || (estaTrackeado(p) && (p.stock_actual ?? 0) <= 0)"
                         class="flex flex-col items-center justify-center bg-zinc-800
                                hover:bg-indigo-600 border border-zinc-700 hover:border-indigo-500
-                               rounded-xl p-3 transition-all active:scale-95 disabled:opacity-50 cursor-pointer">
+                               rounded-xl p-3 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                        [class.border-orange-500]="p.en_promocion" [class.bg-orange-950]="p.en_promocion">
                   <span class="text-white font-medium text-sm">{{ p.nombre }}</span>
-                  <span class="text-indigo-300 text-xs mt-0.5">{{ p.precio | currency:'COP':'$ ':'1.0-0' }}</span>
+                  @if (p.en_promocion && p.precio_promocion) {
+                    <span class="text-orange-300 text-xs font-bold mt-0.5">
+                      🏷 {{ p.precio_promocion | currency:'COP':'$ ':'1.0-0' }}
+                    </span>
+                    <span class="text-zinc-500 text-xs line-through">{{ p.precio | currency:'COP':'$ ':'1.0-0' }}</span>
+                  } @else {
+                    <span class="text-indigo-300 text-xs mt-0.5">{{ p.precio | currency:'COP':'$ ':'1.0-0' }}</span>
+                  }
                   @if (estaTrackeado(p)) {
                     <span class="text-xs mt-0.5 font-semibold"
                           [style]="(p.stock_actual ?? 0) > 0 ? 'color:#4ade80' : 'color:#f87171'">
@@ -242,9 +250,19 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
               @for (p of productos(); track p.id) {
                 <div class="product-row" [class.activo]="(carrito()[p.id] ?? 0) > 0">
                   <div class="min-w-0 flex-1">
-                    <p class="text-white text-sm font-medium truncate">{{ p.nombre }}</p>
+                    <div class="flex items-center gap-1.5">
+                      <p class="text-white text-sm font-medium truncate">{{ p.nombre }}</p>
+                      @if (p.en_promocion) {
+                        <span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;background:rgb(249 115 22/0.15);color:#fb923c">OFERTA</span>
+                      }
+                    </div>
                     <div class="flex items-center gap-2">
-                      <p class="text-indigo-400 text-xs">{{ p.precio | currency:'COP':'$ ':'1.0-0' }}</p>
+                      @if (p.en_promocion && p.precio_promocion) {
+                        <p class="text-orange-400 text-xs font-bold">{{ p.precio_promocion | currency:'COP':'$ ':'1.0-0' }}</p>
+                        <p class="text-zinc-600 text-xs line-through">{{ p.precio | currency:'COP':'$ ':'1.0-0' }}</p>
+                      } @else {
+                        <p class="text-indigo-400 text-xs">{{ p.precio | currency:'COP':'$ ':'1.0-0' }}</p>
+                      }
                       @if (estaTrackeado(p)) {
                         <span class="text-xs font-semibold"
                               [style]="(p.stock_actual ?? 0) > 0 ? 'color:#4ade80' : 'color:#f87171'">
@@ -263,7 +281,7 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
                             [disabled]="estaTrackeado(p) && (carrito()[p.id] ?? 0) >= (p.stock_actual ?? 0)">+</button>
                     @if ((carrito()[p.id] ?? 0) > 0) {
                       <span class="text-zinc-400 text-xs w-20 text-right">
-                        = {{ p.precio * (carrito()[p.id] ?? 0) | currency:'COP':'$ ':'1.0-0' }}
+                        = {{ precioEfectivo(p) * (carrito()[p.id] ?? 0) | currency:'COP':'$ ':'1.0-0' }}
                       </span>
                     }
                   </div>
@@ -394,9 +412,13 @@ export class ClienteDetalleComponent implements OnInit {
   productos = signal<Producto[]>([]);
   carrito = signal<Partial<Record<string, number>>>({});
 
+  precioEfectivo(p: Producto): number {
+    return p.en_promocion && p.precio_promocion ? p.precio_promocion : p.precio;
+  }
+
   totalCarrito = computed(() =>
     this.productos().reduce((sum, p) =>
-      sum + p.precio * (this.carrito()[p.id] ?? 0), 0)
+      sum + this.precioEfectivo(p) * (this.carrito()[p.id] ?? 0), 0)
   );
 
   descripcionCompra = computed(() =>
@@ -515,9 +537,10 @@ export class ClienteDetalleComponent implements OnInit {
     if (!userId) return;
     this.procesando.set(true);
     try {
-      await this.movSvc.compraRapida(this.id(), producto.nombre, producto.precio, userId);
+      const precioFinal = this.precioEfectivo(producto);
+      await this.movSvc.compraRapida(this.id(), producto.nombre, precioFinal, userId);
       if (this.estaTrackeado(producto)) {
-        await this.invSvc.registrarSalida({ producto_id: producto.id, cantidad: 1, precio_unit: producto.precio, fecha: new Date().toISOString() });
+        await this.invSvc.registrarSalida({ producto_id: producto.id, cantidad: 1, precio_unit: precioFinal, fecha: new Date().toISOString() });
       }
       this.msg.add({ severity: 'success', summary: producto.nombre, detail: 'Registrado' });
       await this.cargar(this.id());
@@ -549,7 +572,7 @@ export class ClienteDetalleComponent implements OnInit {
       const fecha = this.fechaCompra ? new Date(this.fechaCompra).toISOString() : new Date().toISOString();
       const salidas = this.productos()
         .filter(p => (this.carrito()[p.id] ?? 0) > 0 && this.estaTrackeado(p))
-        .map(p => this.invSvc.registrarSalida({ producto_id: p.id, cantidad: this.carrito()[p.id] ?? 0, precio_unit: p.precio, fecha }));
+        .map(p => this.invSvc.registrarSalida({ producto_id: p.id, cantidad: this.carrito()[p.id] ?? 0, precio_unit: this.precioEfectivo(p), fecha }));
       await Promise.allSettled(salidas);
       this.msg.add({ severity: 'success', summary: 'Compra registrada',
                      detail: this.descripcionCompra() });

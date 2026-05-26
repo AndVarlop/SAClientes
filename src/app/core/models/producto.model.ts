@@ -9,4 +9,6 @@ export interface Producto {
   stock_actual?: number;
   unidad?: string;
   unidades_por_paquete?: number;
+  en_promocion?: boolean;
+  precio_promocion?: number;
 }
