@@ -570,8 +570,9 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
 
         <div class="flex flex-col gap-1.5">
           <label class="text-zinc-300 text-sm font-medium">Producto *</label>
-          <p-select [options]="productosActivos()" formControlName="producto_id"
+          <p-select [options]="productosParaSelector()" formControlName="producto_id"
                     optionLabel="nombre" optionValue="id"
+                    optionDisabled="sinStock"
                     placeholder="Seleccionar producto" styleClass="w-full"
                     [filter]="true" filterBy="nombre"
                     (onChange)="onProductoMov($event.value)" />
@@ -728,6 +729,15 @@ export class InventarioComponent implements OnInit {
   pagStats = signal(1);
 
   productosActivos = computed(() => this.productos().filter(p => p.activo));
+
+  productosParaSelector = computed(() =>
+    this.productosActivos().map(p => ({
+      ...p,
+      sinStock: this.modoMov() === 'SALIDA'
+        && !!(p.precio_costo && p.precio_costo > 0)
+        && (p.stock_actual ?? 0) <= 0
+    }))
+  );
 
   private getLunes(offsetSemanas = 0): Date {
     const d = new Date();
