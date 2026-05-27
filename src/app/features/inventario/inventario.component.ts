@@ -292,6 +292,10 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
                     </div>
                     <div class="min-w-0">
                       <p class="text-white text-sm font-medium">
+                        @if (m.tipo === 'SALIDA' && m.clientes?.nombre) {
+                          <span class="text-indigo-300 font-semibold">{{ m.clientes!.nombre }}</span>
+                          <span class="text-zinc-600 mx-1">·</span>
+                        }
                         {{ m.productos?.nombre ?? '–' }}
                         <span class="text-zinc-500 font-normal">× {{ m.cantidad }}</span>
                       </p>
@@ -1057,7 +1061,7 @@ export class InventarioComponent implements OnInit {
       if (this.modoMov() === 'ENTRADA') {
         await this.svc.registrarEntrada(data);
       } else {
-        await this.svc.registrarSalida(data);
+        await this.svc.registrarSalida({ ...data, cliente_id: this.clienteIdMov || undefined });
         if (this.clienteIdMov) {
           const prod = this.productoMovActual();
           await this.movsSvc.registrar({

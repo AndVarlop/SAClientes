@@ -11,7 +11,9 @@ export interface MovimientoInv {
   nota?: string;
   fecha: string;
   created_at: string;
+  cliente_id?: string;
   productos?: { nombre: string; unidad?: string };
+  clientes?: { nombre: string } | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -47,7 +49,7 @@ export class InventarioService {
   async getMovimientos(): Promise<MovimientoInv[]> {
     const { data, error } = await this.sb
       .from('movimientos_inv')
-      .select('*, productos(nombre, unidad)')
+      .select('*, productos(nombre, unidad), clientes(nombre)')
       .order('fecha', { ascending: false })
       .limit(100);
     if (error) throw error;
@@ -64,7 +66,7 @@ export class InventarioService {
     if (stockErr) throw stockErr;
   }
 
-  async registrarSalida(p: { producto_id: string; cantidad: number; precio_unit: number; nota?: string; fecha: string }) {
+  async registrarSalida(p: { producto_id: string; cantidad: number; precio_unit: number; nota?: string; fecha: string; cliente_id?: string }) {
     const { error: movErr } = await this.sb.from('movimientos_inv').insert({ ...p, tipo: 'SALIDA' });
     if (movErr) throw movErr;
     const { error: stockErr } = await this.sb.rpc('incrementar_stock', {
