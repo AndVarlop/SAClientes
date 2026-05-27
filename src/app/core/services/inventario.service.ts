@@ -12,6 +12,7 @@ export interface MovimientoInv {
   fecha: string;
   created_at: string;
   cliente_id?: string;
+  movimiento_id?: string;
   productos?: { nombre: string; unidad?: string };
   clientes?: { nombre: string } | null;
 }
@@ -66,7 +67,7 @@ export class InventarioService {
     if (stockErr) throw stockErr;
   }
 
-  async registrarSalida(p: { producto_id: string; cantidad: number; precio_unit: number; nota?: string; fecha: string; cliente_id?: string }) {
+  async registrarSalida(p: { producto_id: string; cantidad: number; precio_unit: number; nota?: string; fecha: string; cliente_id?: string; movimiento_id?: string }) {
     const { error: movErr } = await this.sb.from('movimientos_inv').insert({ ...p, tipo: 'SALIDA' });
     if (movErr) throw movErr;
     const { error: stockErr } = await this.sb.rpc('incrementar_stock', {
@@ -85,5 +86,16 @@ export class InventarioService {
     if (error) throw error;
     const delta = tipo === 'ENTRADA' ? -cantidad : cantidad;
     await this.sb.rpc('incrementar_stock', { p_id: productoId, p_delta: delta });
+  }
+
+  async eliminarSalidasPorMovimiento(movimientoId: string) {
+    const { data } = await this.sb
+      .from('movimientos_inv')
+      .select('id, tipo, producto_id, cantidad')
+      .eq('movimiento_id', movimientoId);
+    if (!data || data.length === 0) return;
+    for (const inv of data as { id: string; tipo: 'ENTRADA' | 'SALIDA'; producto_id: string; cantidad: number }[]) {
+      await this.eliminarMovimiento(inv.id, inv.tipo, inv.producto_id, inv.cantidad);
+    }
   }
 }

@@ -1061,10 +1061,10 @@ export class InventarioComponent implements OnInit {
       if (this.modoMov() === 'ENTRADA') {
         await this.svc.registrarEntrada(data);
       } else {
-        await this.svc.registrarSalida({ ...data, cliente_id: this.clienteIdMov || undefined });
+        let movimientoId: string | undefined;
         if (this.clienteIdMov) {
           const prod = this.productoMovActual();
-          await this.movsSvc.registrar({
+          const mov = await this.movsSvc.registrar({
             cliente_id: this.clienteIdMov,
             tipo: 'COMPRA',
             descripcion: `${prod?.nombre ?? 'Producto'} ×${data.cantidad}`,
@@ -1072,7 +1072,9 @@ export class InventarioComponent implements OnInit {
             created_by: this.auth.user()?.id,
             fecha: data.fecha
           });
+          movimientoId = mov?.id;
         }
+        await this.svc.registrarSalida({ ...data, cliente_id: this.clienteIdMov || undefined, movimiento_id: movimientoId });
       }
 
       this.msg.add({
@@ -1100,6 +1102,7 @@ export class InventarioComponent implements OnInit {
       accept: async () => {
         try {
           await this.svc.eliminarMovimiento(m.id, m.tipo, m.producto_id, m.cantidad);
+          if (m.movimiento_id) await this.movsSvc.eliminar(m.movimiento_id);
           this.msg.add({ severity: 'info', summary: 'Eliminado' });
           await this.cargar();
         } catch {

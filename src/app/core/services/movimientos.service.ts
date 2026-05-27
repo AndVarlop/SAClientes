@@ -26,6 +26,16 @@ export class MovimientosService {
     return (data ?? []) as MovimientoConCliente[];
   }
 
+  async getAllConClientes(): Promise<MovimientoConCliente[]> {
+    const { data, error } = await this.sb
+      .from('movimientos')
+      .select('*, clientes(nombre)')
+      .order('fecha', { ascending: false })
+      .limit(1000);
+    if (error) throw error;
+    return (data ?? []) as MovimientoConCliente[];
+  }
+
   async registrar(mov: Partial<Movimiento>) {
     const { data, error } = await this.sb
       .from('movimientos')

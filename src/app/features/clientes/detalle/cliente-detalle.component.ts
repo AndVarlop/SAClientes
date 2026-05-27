@@ -538,9 +538,9 @@ export class ClienteDetalleComponent implements OnInit {
     this.procesando.set(true);
     try {
       const precioFinal = this.precioEfectivo(producto);
-      await this.movSvc.compraRapida(this.id(), producto.nombre, precioFinal, userId);
+      const movResult = await this.movSvc.compraRapida(this.id(), producto.nombre, precioFinal, userId);
       if (this.estaTrackeado(producto)) {
-        await this.invSvc.registrarSalida({ producto_id: producto.id, cantidad: 1, precio_unit: precioFinal, fecha: new Date().toISOString() });
+        await this.invSvc.registrarSalida({ producto_id: producto.id, cantidad: 1, precio_unit: precioFinal, fecha: new Date().toISOString(), cliente_id: this.id(), movimiento_id: movResult?.id });
       }
       this.msg.add({ severity: 'success', summary: producto.nombre, detail: 'Registrado' });
       await this.cargar(this.id());
@@ -559,20 +559,19 @@ export class ClienteDetalleComponent implements OnInit {
       if (this.fotoCompra) {
         foto_url = await this.storageSvc.subirEvidencia(this.id(), this.fotoCompra);
       }
-      await this.movSvc.registrar({
+      const fecha = this.fechaCompra ? new Date(this.fechaCompra).toISOString() : new Date().toISOString();
+      const movData = await this.movSvc.registrar({
         cliente_id: this.id(),
         tipo: 'COMPRA',
         monto: this.totalCarrito(),
         descripcion: this.descripcionCompra(),
         foto_url,
         created_by: this.auth.user()?.id,
-        fecha: this.fechaCompra ? new Date(this.fechaCompra).toISOString() : new Date().toISOString()
+        fecha
       });
-      // Registrar salida en inventario para productos trackeados
-      const fecha = this.fechaCompra ? new Date(this.fechaCompra).toISOString() : new Date().toISOString();
       const salidas = this.productos()
         .filter(p => (this.carrito()[p.id] ?? 0) > 0 && this.estaTrackeado(p))
-        .map(p => this.invSvc.registrarSalida({ producto_id: p.id, cantidad: this.carrito()[p.id] ?? 0, precio_unit: this.precioEfectivo(p), fecha }));
+        .map(p => this.invSvc.registrarSalida({ producto_id: p.id, cantidad: this.carrito()[p.id] ?? 0, precio_unit: this.precioEfectivo(p), fecha, cliente_id: this.id(), movimiento_id: movData?.id }));
       await Promise.allSettled(salidas);
       this.msg.add({ severity: 'success', summary: 'Compra registrada',
                      detail: this.descripcionCompra() });
@@ -622,6 +621,7 @@ export class ClienteDetalleComponent implements OnInit {
       acceptButtonStyleClass: 'p-button-danger',
       accept: async () => {
         try {
+          await this.invSvc.eliminarSalidasPorMovimiento(m.id);
           await this.movSvc.eliminar(m.id);
           this.msg.add({ severity: 'info', summary: 'Eliminado' });
           await this.cargar(this.id());

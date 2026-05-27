@@ -8,7 +8,7 @@ import { StorageService } from '../../../core/services/storage.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { InventarioService } from '../../../core/services/inventario.service';
 import { SaldoCliente } from '../../../core/models/cliente.model';
-import { Movimiento } from '../../../core/models/movimiento.model';
+import { Movimiento, MovimientoConCliente } from '../../../core/models/movimiento.model';
 import { Producto } from '../../../core/models/producto.model';
 import { MessageService, ConfirmationService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
@@ -72,6 +72,23 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
       font-size: 14px; outline: none; transition: border-color 0.2s; color-scheme: dark;
     }
     .fecha-input:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgb(99 102 241/0.2); }
+    .week-nav-btn {
+      width: 32px; height: 32px; border-radius: 9px; background: #27272a; border: 1px solid #3f3f46;
+      color: #a1a1aa; cursor: pointer; display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 700; transition: all 0.15s; flex-shrink: 0;
+    }
+    .week-nav-btn:hover { border-color: #6366f1; color: white; }
+    .pag-btn {
+      padding: 6px 14px; border-radius: 8px; background: #27272a; border: 1px solid #3f3f46;
+      color: #a1a1aa; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.15s;
+    }
+    .pag-btn:hover:not(:disabled) { border-color: #6366f1; color: white; }
+    .pag-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .chip-tipo {
+      font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 20px;
+    }
+    .chip-compra { background: rgb(239 68 68/0.1); color: #f87171; }
+    .chip-abono  { background: rgb(34 197 94/0.1);  color: #4ade80; }
   `],
   template: `
     <div class="p-5 md:p-8 max-w-4xl mx-auto">
@@ -92,6 +109,105 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
                   placeholder="Buscar cliente por nombre..."
                   styleClass="w-full" [filter]="true" filterBy="nombre"
                   (onChange)="onClienteChange($event.value)" />
+      </div>
+
+      <!-- ══ TODOS LOS MOVIMIENTOS ══ -->
+      <div class="mt-2 mb-8">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-white font-semibold text-base flex items-center gap-2">
+            <span class="w-6 h-6 bg-indigo-500/15 rounded-lg flex items-center justify-center">
+              <i class="pi pi-list text-indigo-400 text-xs"></i>
+            </span>
+            Todos los movimientos
+          </h3>
+          <span class="text-zinc-500 text-xs">{{ todosMovsFiltrados().length }} registros</span>
+        </div>
+
+        <!-- Filtro semana -->
+        <div style="background:#18181b;border:1px solid #27272a;border-radius:14px;padding:14px 16px;margin-bottom:16px">
+          <div class="flex items-center gap-2 mb-3">
+            <button class="week-nav-btn" (click)="allSemAnterior()">←</button>
+            <div class="flex-1 text-center">
+              <span class="text-white font-semibold text-sm">{{ allSemLabel() }}</span>
+              @if (allCustom()) {
+                <span style="font-size:10px;margin-left:6px;padding:1px 8px;border-radius:20px;
+                             background:rgb(99 102 241/0.15);color:#818cf8">custom</span>
+              }
+            </div>
+            <button class="week-nav-btn" (click)="allSemSiguiente()">→</button>
+            @if (allOffset() !== 0 || allCustom()) {
+              <button (click)="allSemActual()"
+                      style="padding:4px 12px;border-radius:8px;background:rgb(99 102 241/0.1);
+                             border:1px solid rgb(99 102 241/0.3);color:#818cf8;cursor:pointer;
+                             font-size:12px;font-weight:600;white-space:nowrap">
+                Hoy
+              </button>
+            }
+          </div>
+          <div class="flex gap-2 items-center">
+            <input type="date" class="fecha-input" style="flex:1;font-size:13px;padding:8px 10px"
+                   [value]="allDesdeStr()"
+                   (change)="allDesdeStr.set($any($event.target).value)" />
+            <span class="text-zinc-600 text-xs shrink-0">→</span>
+            <input type="date" class="fecha-input" style="flex:1;font-size:13px;padding:8px 10px"
+                   [value]="allHastaStr()"
+                   (change)="allHastaStr.set($any($event.target).value)" />
+            <button (click)="allAplicarCustom()"
+                    [disabled]="!allDesdeStr() || !allHastaStr()"
+                    [style.opacity]="!allDesdeStr() || !allHastaStr() ? '0.4' : '1'"
+                    style="padding:8px 14px;border-radius:9px;background:rgb(99 102 241/0.1);
+                           border:1px solid rgb(99 102 241/0.3);color:#818cf8;cursor:pointer;
+                           font-size:12px;font-weight:600;white-space:nowrap">
+              Aplicar
+            </button>
+          </div>
+        </div>
+
+        <!-- Lista -->
+        <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+          @if (cargandoAll()) {
+            <div class="text-center py-10 text-zinc-500">
+              <i class="pi pi-spinner pi-spin text-2xl block mb-2"></i>
+            </div>
+          } @else if (todosMovsPaginados().length === 0) {
+            <p class="text-zinc-500 text-sm text-center py-8">Sin movimientos en este periodo</p>
+          } @else {
+            @for (m of todosMovsPaginados(); track m.id) {
+              <div class="mov-row">
+                <div class="flex items-start gap-3 min-w-0 flex-1">
+                  <div class="mov-dot"
+                       [style]="m.tipo === 'COMPRA' ? 'background:rgb(239 68 68/0.1)' : 'background:rgb(34 197 94/0.1)'">
+                    <i [class]="m.tipo === 'COMPRA' ? 'pi pi-shopping-cart' : 'pi pi-check'"
+                       [style]="m.tipo === 'COMPRA' ? 'color:#f87171' : 'color:#4ade80'"></i>
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <p class="text-white text-sm font-semibold leading-5">
+                      {{ m.clientes?.nombre ?? '–' }}
+                    </p>
+                    <p class="text-zinc-400 text-xs leading-5">{{ m.descripcion || m.tipo }}</p>
+                    <p class="text-zinc-600 text-xs">{{ m.fecha | date:'dd/MM/yyyy · HH:mm' }}</p>
+                  </div>
+                </div>
+                <div class="text-right ml-3 shrink-0">
+                  <p class="font-bold text-sm"
+                     [style]="m.tipo === 'COMPRA' ? 'color:#f87171' : 'color:#4ade80'">
+                    {{ m.tipo === 'COMPRA' ? '+' : '−' }}{{ m.monto | currency:'COP':'$ ':'1.0-0' }}
+                  </p>
+                  <span class="chip-tipo" [class]="m.tipo === 'COMPRA' ? 'chip-compra' : 'chip-abono'">
+                    {{ m.tipo }}
+                  </span>
+                </div>
+              </div>
+            }
+            @if (allTotalPags() > 1) {
+              <div class="flex items-center justify-between pt-3 mt-3 border-t border-zinc-800">
+                <button class="pag-btn" (click)="allPrevPag()" [disabled]="allPag() === 1">← Anterior</button>
+                <span class="text-zinc-500 text-xs">Pág {{ allPag() }} de {{ allTotalPags() }}</span>
+                <button class="pag-btn" (click)="allNextPag()" [disabled]="allPag() >= allTotalPags()">Siguiente →</button>
+              </div>
+            }
+          }
+        </div>
       </div>
 
       @if (cargando()) {
@@ -346,6 +462,7 @@ export class RegistrarMovimientoComponent implements OnInit {
   cargando = signal(false);
   guardando = signal(false);
   procesando = signal(false);
+  cargandoAll = signal(false);
   mostrarCompra = false;
   mostrarAbono = false;
 
@@ -353,8 +470,63 @@ export class RegistrarMovimientoComponent implements OnInit {
   clienteIdSeleccionado: string | null = null;
   cliente = signal<SaldoCliente | null>(null);
   movimientos = signal<Movimiento[]>([]);
+  todosMovs = signal<MovimientoConCliente[]>([]);
   productos = signal<Producto[]>([]);
   carrito = signal<Partial<Record<string, number>>>({});
+
+  // ── Filtro fecha todos los movimientos ──
+  readonly ALL_PAGE_SIZE = 15;
+  allOffset = signal(0);
+  allCustom = signal(false);
+  allDesdeStr = signal('');
+  allHastaStr = signal('');
+  allPag = signal(1);
+
+  private getAllLunes(offset = 0): Date {
+    const d = new Date();
+    const day = d.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    const lunes = new Date(d);
+    lunes.setDate(d.getDate() + diff + offset * 7);
+    lunes.setHours(0, 0, 0, 0);
+    return lunes;
+  }
+
+  allSemIni = computed(() => this.getAllLunes(this.allOffset()));
+  allSemFin = computed(() => {
+    const fin = new Date(this.allSemIni());
+    fin.setDate(fin.getDate() + 6);
+    fin.setHours(23, 59, 59, 999);
+    return fin;
+  });
+  allSemLabel = computed(() => {
+    const fmt = (d: Date) => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+    if (this.allCustom()) return this.allDesdeStr() && this.allHastaStr()
+      ? `${this.allDesdeStr()} – ${this.allHastaStr()}` : 'Rango personalizado';
+    const ini = this.allSemIni(), fin = this.allSemFin();
+    if (this.allOffset() === 0) return `Esta semana · ${fmt(ini)} – ${fmt(fin)}`;
+    if (this.allOffset() === -1) return `Sem. pasada · ${fmt(ini)} – ${fmt(fin)}`;
+    return `${fmt(ini)} – ${fmt(fin)}`;
+  });
+  allDesde = computed(() => this.allCustom() && this.allDesdeStr()
+    ? new Date(this.allDesdeStr() + 'T00:00:00') : this.allSemIni());
+  allHasta = computed(() => this.allCustom() && this.allHastaStr()
+    ? new Date(this.allHastaStr() + 'T23:59:59') : this.allSemFin());
+
+  todosMovsFiltrados = computed(() => {
+    const desde = this.allDesde(), hasta = this.allHasta();
+    return this.todosMovs().filter(m => {
+      const f = new Date(m.fecha);
+      return f >= desde && f <= hasta;
+    });
+  });
+  todosMovsPaginados = computed(() => {
+    const start = (this.allPag() - 1) * this.ALL_PAGE_SIZE;
+    return this.todosMovsFiltrados().slice(start, start + this.ALL_PAGE_SIZE);
+  });
+  allTotalPags = computed(() =>
+    Math.max(1, Math.ceil(this.todosMovsFiltrados().length / this.ALL_PAGE_SIZE))
+  );
 
   fotoCompra: File | null = null;
   fotoAbono: File | null = null;
@@ -385,7 +557,24 @@ export class RegistrarMovimientoComponent implements OnInit {
     ]);
     this.todosClientes.set(clientes);
     this.productos.set(productos);
+    this.cargarTodosMovs();
   }
+
+  async cargarTodosMovs() {
+    this.cargandoAll.set(true);
+    try {
+      this.todosMovs.set(await this.movSvc.getAllConClientes());
+    } finally {
+      this.cargandoAll.set(false);
+    }
+  }
+
+  allSemAnterior() { this.allOffset.update(v => v - 1); this.allCustom.set(false); this.allPag.set(1); }
+  allSemSiguiente() { this.allOffset.update(v => v + 1); this.allCustom.set(false); this.allPag.set(1); }
+  allSemActual() { this.allOffset.set(0); this.allCustom.set(false); this.allDesdeStr.set(''); this.allHastaStr.set(''); this.allPag.set(1); }
+  allAplicarCustom() { if (!this.allDesdeStr() || !this.allHastaStr()) return; this.allCustom.set(true); this.allPag.set(1); }
+  allPrevPag() { if (this.allPag() > 1) this.allPag.update(v => v - 1); }
+  allNextPag() { if (this.allPag() < this.allTotalPags()) this.allPag.update(v => v + 1); }
 
   async onClienteChange(id: string) {
     const cliente = this.todosClientes().find(c => c.id === id) ?? null;
@@ -408,14 +597,16 @@ export class RegistrarMovimientoComponent implements OnInit {
   private async recargar() {
     const id = this.cliente()?.id;
     if (!id) return;
-    const [clientes, movs] = await Promise.all([
+    const [clientes, movs, todos] = await Promise.all([
       this.clientesSvc.getAll(),
-      this.movSvc.getByCliente(id)
+      this.movSvc.getByCliente(id),
+      this.movSvc.getAllConClientes()
     ]);
     this.todosClientes.set(clientes);
     const clienteActualizado = clientes.find(c => c.id === id) ?? null;
     this.cliente.set(clienteActualizado);
     this.movimientos.set(movs);
+    this.todosMovs.set(todos);
   }
 
   tieneItems(desc?: string): boolean { return !!desc && desc.includes(','); }
@@ -476,9 +667,9 @@ export class RegistrarMovimientoComponent implements OnInit {
     if (!id || !userId) return;
     this.procesando.set(true);
     try {
-      await this.movSvc.compraRapida(id, producto.nombre, producto.precio, userId);
+      const movResult = await this.movSvc.compraRapida(id, producto.nombre, producto.precio, userId);
       if (this.estaTrackeado(producto)) {
-        await this.invSvc.registrarSalida({ producto_id: producto.id, cantidad: 1, precio_unit: producto.precio, fecha: new Date().toISOString() });
+        await this.invSvc.registrarSalida({ producto_id: producto.id, cantidad: 1, precio_unit: producto.precio, fecha: new Date().toISOString(), cliente_id: id, movimiento_id: movResult?.id });
       }
       this.msg.add({ severity: 'success', summary: producto.nombre, detail: 'Registrado' });
       await this.recargar();
@@ -497,19 +688,19 @@ export class RegistrarMovimientoComponent implements OnInit {
     try {
       let foto_url: string | undefined;
       if (this.fotoCompra) foto_url = await this.storageSvc.subirEvidencia(id, this.fotoCompra);
-      await this.movSvc.registrar({
+      const fecha = this.fechaCompra ? new Date(this.fechaCompra).toISOString() : new Date().toISOString();
+      const movData = await this.movSvc.registrar({
         cliente_id: id,
         tipo: 'COMPRA',
         monto: this.totalCarrito(),
         descripcion: this.descripcionCompra(),
         foto_url,
         created_by: this.auth.user()?.id,
-        fecha: this.fechaCompra ? new Date(this.fechaCompra).toISOString() : new Date().toISOString()
+        fecha
       });
-      const fecha = this.fechaCompra ? new Date(this.fechaCompra).toISOString() : new Date().toISOString();
       const salidas = this.productos()
         .filter(p => (this.carrito()[p.id] ?? 0) > 0 && this.estaTrackeado(p))
-        .map(p => this.invSvc.registrarSalida({ producto_id: p.id, cantidad: this.carrito()[p.id] ?? 0, precio_unit: p.precio, fecha }));
+        .map(p => this.invSvc.registrarSalida({ producto_id: p.id, cantidad: this.carrito()[p.id] ?? 0, precio_unit: p.precio, fecha, cliente_id: id, movimiento_id: movData?.id }));
       await Promise.allSettled(salidas);
       this.msg.add({ severity: 'success', summary: 'Compra registrada', detail: this.descripcionCompra() });
       this.cerrarCompra();
@@ -558,6 +749,7 @@ export class RegistrarMovimientoComponent implements OnInit {
       acceptButtonStyleClass: 'p-button-danger',
       accept: async () => {
         try {
+          await this.invSvc.eliminarSalidasPorMovimiento(m.id);
           await this.movSvc.eliminar(m.id);
           this.msg.add({ severity: 'info', summary: 'Eliminado' });
           await this.recargar();
