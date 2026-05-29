@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed, OnInit, input, effect } from '@angular/core';
+﻿import { Component, inject, signal, computed, OnInit, input, effect } from '@angular/core';
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { FormBuilder, ReactiveFormsModule, FormsModule, Validators } from '@angular/forms';
@@ -685,26 +685,35 @@ export class ClienteDetalleComponent implements OnInit {
     this.enviandoPdf.set(true);
     try {
       const blob = await this.pdfSvc.generarFactura(cliente, this.movimientos(), this.mesFiltro, this.anioFiltro);
-      const mes = this.mesesOpciones.find(m => m.valor === this.mesFiltro)?.label ?? '';
-      const nombreArchivo = `Factura_${cliente.nombre.replace(/\s+/g, '_')}_${this.anioFiltro}-${String(this.mesFiltro).padStart(2,'0')}.pdf`;
-      const file = new File([blob], nombreArchivo, { type: 'application/pdf' });
+      const urlPdf = await this.storageSvc.subirFactura(cliente.id, blob, this.mesFiltro, this.anioFiltro);
+      const telefono = cliente.telefono.replace(/\D/g, '');
 
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          text: `Hola ${cliente.nombre}, aquí está tu estado de cuenta de ${mes} ${this.anioFiltro}.`
-        });
-      } else {
-        // Fallback: link de Supabase
-        const urlPdf = await this.storageSvc.subirFactura(cliente.id, blob, this.mesFiltro, this.anioFiltro);
-        const telefono = cliente.telefono.replace(/\D/g, '');
-        const texto = encodeURIComponent(`Hola ${cliente.nombre}, tu estado de cuenta de ${mes} ${this.anioFiltro}:\n${urlPdf}`);
-        window.open(`https://wa.me/${telefono}?text=${texto}`, '_blank');
-      }
-    } catch (e: any) {
-      if (e?.name !== 'AbortError') {
-        this.msg.add({ severity: 'error', summary: 'Error', detail: 'No se pudo compartir la factura' });
-      }
+      const movsMes = this.movimientos().filter(m => {
+        const f = new Date(m.fecha);
+        return f.getMonth() + 1 === this.mesFiltro && f.getFullYear() === this.anioFiltro;
+      });
+      const deuda = movsMes.filter(m => m.tipo === 'COMPRA').reduce((s, m) => s + m.monto, 0);
+      const abono = movsMes.filter(m => m.tipo === 'ABONO').reduce((s, m) => s + m.monto, 0);
+      const total = deuda - abono;
+      const fmt = (n: number) => n.toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
+
+      const texto = encodeURIComponent(
+`Hola ${cliente.nombre}! Pasó por aquí para mandar tu factura jeje
+
+Deuda: ${fmt(deuda)}
+Abono: ${fmt(abono)}
+
+Total: ${fmt(total)}
+
+Detalle:
+${urlPdf}
+
+Nequi o llave: 3014030939
+Gracias!`
+      );
+      window.open(`https://wa.me/${telefono}?text=${texto}`, '_blank');
+    } catch {
+      this.msg.add({ severity: 'error', summary: 'Error', detail: 'No se pudo enviar la factura' });
     } finally {
       this.enviandoPdf.set(false);
     }
