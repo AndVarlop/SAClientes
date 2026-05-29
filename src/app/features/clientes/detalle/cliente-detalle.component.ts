@@ -8,6 +8,7 @@ import { ProductosService } from '../../../core/services/productos.service';
 import { StorageService } from '../../../core/services/storage.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { InventarioService } from '../../../core/services/inventario.service';
+import { PdfService } from '../../../core/services/pdf.service';
 import { SaldoCliente } from '../../../core/models/cliente.model';
 import { Movimiento } from '../../../core/models/movimiento.model';
 import { Producto } from '../../../core/models/producto.model';
@@ -124,11 +125,43 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
         </div>
 
         <!-- Acciones -->
-        <div class="flex gap-3 mb-6 flex-wrap">
+        <div class="flex gap-3 mb-4 flex-wrap">
           <button pButton label="Registrar compra" icon="pi pi-shopping-cart"
                   (click)="abrirCompra()"></button>
           <button pButton label="Registrar abono" icon="pi pi-check-circle"
                   severity="success" (click)="abrirAbono()"></button>
+        </div>
+
+        <!-- Factura mensual -->
+        <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-6">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="w-6 h-6 bg-indigo-500/15 rounded-lg flex items-center justify-center">
+              <i class="pi pi-file-pdf text-indigo-400 text-xs"></i>
+            </span>
+            <h3 class="text-white font-semibold text-sm">Factura mensual</h3>
+          </div>
+          <div class="flex items-center gap-3 flex-wrap">
+            <select [(ngModel)]="mesFiltro"
+                    class="bg-zinc-800 border border-zinc-700 text-white text-sm rounded-lg px-3 py-2 outline-none focus:border-indigo-500">
+              @for (m of mesesOpciones; track m.valor) {
+                <option [value]="m.valor">{{ m.label }}</option>
+              }
+            </select>
+            <select [(ngModel)]="anioFiltro"
+                    class="bg-zinc-800 border border-zinc-700 text-white text-sm rounded-lg px-3 py-2 outline-none focus:border-indigo-500">
+              @for (a of aniosOpciones; track a) {
+                <option [value]="a">{{ a }}</option>
+              }
+            </select>
+            <button pButton label="Descargar PDF" icon="pi pi-download" severity="secondary"
+                    [loading]="generandoPdf()"
+                    (click)="descargarFactura()"></button>
+            <button pButton label="Enviar WhatsApp" icon="pi pi-whatsapp"
+                    [loading]="enviandoPdf()"
+                    [disabled]="!cliente()?.telefono"
+                    [title]="!cliente()?.telefono ? 'El cliente no tiene teléfono registrado' : ''"
+                    (click)="enviarWhatsApp()"></button>
+          </div>
         </div>
 
         <!-- Toque rápido -->
@@ -392,6 +425,7 @@ export class ClienteDetalleComponent implements OnInit {
   private storageSvc = inject(StorageService);
   private auth = inject(AuthService);
   private invSvc = inject(InventarioService);
+  private pdfSvc = inject(PdfService);
   private msg = inject(MessageService);
   private confirm = inject(ConfirmationService);
   private fb = inject(FormBuilder);
@@ -399,8 +433,23 @@ export class ClienteDetalleComponent implements OnInit {
   cargando = signal(true);
   guardando = signal(false);
   procesando = signal(false);
+  generandoPdf = signal(false);
+  enviandoPdf = signal(false);
   mostrarAbono = false;
   mostrarCompra = false;
+
+  readonly mesesOpciones = [
+    { valor: 1, label: 'Enero' }, { valor: 2, label: 'Febrero' },
+    { valor: 3, label: 'Marzo' }, { valor: 4, label: 'Abril' },
+    { valor: 5, label: 'Mayo' }, { valor: 6, label: 'Junio' },
+    { valor: 7, label: 'Julio' }, { valor: 8, label: 'Agosto' },
+    { valor: 9, label: 'Septiembre' }, { valor: 10, label: 'Octubre' },
+    { valor: 11, label: 'Noviembre' }, { valor: 12, label: 'Diciembre' },
+  ];
+  readonly aniosOpciones = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
+
+  mesFiltro = new Date().getMonth() + 1;
+  anioFiltro = new Date().getFullYear();
 
   fotoCompra: File | null = null;
   fotoAbono: File | null = null;
@@ -608,6 +657,56 @@ export class ClienteDetalleComponent implements OnInit {
       this.msg.add({ severity: 'error', summary: 'Error', detail: 'No se pudo registrar' });
     } finally {
       this.guardando.set(false);
+    }
+  }
+
+  async descargarFactura() {
+    const cliente = this.cliente();
+    if (!cliente) return;
+    this.generandoPdf.set(true);
+    try {
+      const blob = await this.pdfSvc.generarFactura(cliente, this.movimientos(), this.mesFiltro, this.anioFiltro);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Factura_${cliente.nombre.replace(/\s+/g, '_')}_${this.anioFiltro}-${String(this.mesFiltro).padStart(2,'0')}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      this.msg.add({ severity: 'error', summary: 'Error', detail: 'No se pudo generar el PDF' });
+    } finally {
+      this.generandoPdf.set(false);
+    }
+  }
+
+  async enviarWhatsApp() {
+    const cliente = this.cliente();
+    if (!cliente?.telefono) return;
+    this.enviandoPdf.set(true);
+    try {
+      const blob = await this.pdfSvc.generarFactura(cliente, this.movimientos(), this.mesFiltro, this.anioFiltro);
+      const mes = this.mesesOpciones.find(m => m.valor === this.mesFiltro)?.label ?? '';
+      const nombreArchivo = `Factura_${cliente.nombre.replace(/\s+/g, '_')}_${this.anioFiltro}-${String(this.mesFiltro).padStart(2,'0')}.pdf`;
+      const file = new File([blob], nombreArchivo, { type: 'application/pdf' });
+
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          text: `Hola ${cliente.nombre}, aquí está tu estado de cuenta de ${mes} ${this.anioFiltro}.`
+        });
+      } else {
+        // Fallback: link de Supabase
+        const urlPdf = await this.storageSvc.subirFactura(cliente.id, blob, this.mesFiltro, this.anioFiltro);
+        const telefono = cliente.telefono.replace(/\D/g, '');
+        const texto = encodeURIComponent(`Hola ${cliente.nombre}, tu estado de cuenta de ${mes} ${this.anioFiltro}:\n${urlPdf}`);
+        window.open(`https://wa.me/${telefono}?text=${texto}`, '_blank');
+      }
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') {
+        this.msg.add({ severity: 'error', summary: 'Error', detail: 'No se pudo compartir la factura' });
+      }
+    } finally {
+      this.enviandoPdf.set(false);
     }
   }
 

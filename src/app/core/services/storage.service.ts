@@ -26,4 +26,15 @@ export class StorageService {
     const { data } = this.sb.storage.from('evidencias').getPublicUrl(path);
     return data.publicUrl;
   }
+
+  async subirFactura(clienteId: string, blob: Blob, mes: number, anio: number): Promise<string> {
+    const mesStr = String(mes).padStart(2, '0');
+    const path = `facturas/${clienteId}/${anio}-${mesStr}.pdf`;
+    const { error } = await this.sb.storage
+      .from('evidencias')
+      .upload(path, blob, { upsert: true, contentType: 'application/pdf' });
+    if (error) throw error;
+    const { data } = this.sb.storage.from('evidencias').getPublicUrl(path);
+    return data.publicUrl;
+  }
 }
