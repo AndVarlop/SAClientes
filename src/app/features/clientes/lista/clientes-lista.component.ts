@@ -25,12 +25,21 @@ import { DialogModule } from 'primeng/dialog';
         <button pButton icon="pi pi-plus" label="Nuevo" (click)="abrirFormulario()"></button>
       </div>
 
-      <div class="mb-4">
-        <span class="p-input-icon-left w-full">
-          <i class="pi pi-search"></i>
-          <input pInputText [ngModel]="busqueda()" (ngModelChange)="busqueda.set($event)"
-                 placeholder="Buscar cliente..." class="w-full" />
-        </span>
+      <div class="mb-3">
+        <input pInputText [ngModel]="busqueda()" (ngModelChange)="busqueda.set($event)"
+               placeholder="Buscar cliente..." class="w-full" />
+      </div>
+
+      <div class="flex gap-2 mb-4">
+        @for (f of filtros; track f.valor) {
+          <button (click)="filtroEstado.set(f.valor)"
+                  class="px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors"
+                  [class]="filtroEstado() === f.valor
+                    ? 'bg-indigo-600 border-indigo-500 text-white'
+                    : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-white'">
+            {{ f.label }}
+          </button>
+        }
       </div>
 
       @if (cargando()) {
@@ -109,15 +118,24 @@ export class ClientesListaComponent implements OnInit {
   guardando = signal(false);
   mostrarForm = false;
   busqueda = signal('');
+  filtroEstado = signal<'todos' | 'al-dia' | 'pendiente'>('todos');
   clientes = signal<SaldoCliente[]>([]);
   clienteEdit: SaldoCliente | null = null;
 
+  readonly filtros = [
+    { valor: 'todos'     as const, label: 'Todos' },
+    { valor: 'pendiente' as const, label: 'Pendiente' },
+    { valor: 'al-dia'    as const, label: 'Al día' },
+  ];
+
   clientesFiltrados = computed(() => {
     const q = this.busqueda().toLowerCase().trim();
-    if (!q) return this.clientes();
-    return this.clientes().filter(c =>
-      c.nombre.toLowerCase().includes(q) || (c.telefono ?? '').includes(q)
-    );
+    const estado = this.filtroEstado();
+    return this.clientes().filter(c => {
+      const matchQ = !q || c.nombre.toLowerCase().includes(q) || (c.telefono ?? '').includes(q);
+      const matchE = estado === 'todos' || (estado === 'pendiente' ? c.saldo > 0 : c.saldo <= 0);
+      return matchQ && matchE;
+    });
   });
 
   form = this.fb.group({

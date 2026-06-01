@@ -7,6 +7,9 @@ import { AnimationService } from '../../core/services/animation.service';
 import { SaldoCliente } from '../../core/models/cliente.model';
 import { MovimientoConCliente } from '../../core/models/movimiento.model';
 
+const MESES_NOMBRE = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                       'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
 @Component({
   selector: 'app-dashboard',
   standalone: true,
@@ -66,7 +69,7 @@ import { MovimientoConCliente } from '../../core/models/movimiento.model';
     <div class="p-5 md:p-7 max-w-5xl mx-auto">
 
       <!-- Header -->
-      <div class="flex items-center justify-between mb-7">
+      <div class="flex items-center justify-between mb-5">
         <div>
           <h2 class="text-2xl font-bold text-white">Dashboard</h2>
           <p class="text-zinc-500 text-sm mt-0.5">Resumen del negocio</p>
@@ -74,17 +77,33 @@ import { MovimientoConCliente } from '../../core/models/movimiento.model';
         <a routerLink="/admin/clientes"
            class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white
                   text-sm font-medium px-4 py-2 rounded-xl transition-colors">
-          <i class="pi pi-plus text-sm"></i>
-          Nueva compra
+          <i class="pi pi-plus text-sm"></i> Nueva compra
         </a>
       </div>
 
+      <!-- Navegador de mes -->
+      <div class="flex items-center justify-center gap-4 mb-6
+                  bg-zinc-900 border border-zinc-800 rounded-2xl py-3 px-5">
+        <button (click)="mesAnterior()"
+                class="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700
+                       flex items-center justify-center text-zinc-400 hover:text-white transition-colors">
+          <i class="pi pi-chevron-left text-xs"></i>
+        </button>
+        <span class="text-white font-semibold text-base min-w-36 text-center">
+          {{ nombreMes() }} {{ mesDash().anio }}
+        </span>
+        <button (click)="mesSiguiente()" [disabled]="esMesActual()"
+                class="w-8 h-8 rounded-lg border flex items-center justify-center transition-colors"
+                [class]="esMesActual()
+                  ? 'bg-zinc-900 border-zinc-800 text-zinc-700 cursor-not-allowed'
+                  : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-zinc-400 hover:text-white'">
+          <i class="pi pi-chevron-right text-xs"></i>
+        </button>
+      </div>
+
       @if (cargando()) {
-        <!-- Skeletons -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-7">
-          @for (i of [1,2,3]; track i) {
-            <div class="skeleton h-24"></div>
-          }
+          @for (i of [1,2,3]; track i) { <div class="skeleton h-24"></div> }
         </div>
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <div class="skeleton h-72"></div>
@@ -92,17 +111,31 @@ import { MovimientoConCliente } from '../../core/models/movimiento.model';
         </div>
       } @else {
 
-        <!-- Stats -->
+        <!-- Stats del mes -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-7 stagger">
           <div class="stat-card" style="opacity:0">
             <div class="stat-icon" style="background: rgb(99 102 241 / 0.12)">
-              <i class="pi pi-chart-line" style="color: #818cf8"></i>
+              <i class="pi pi-shopping-cart" style="color: #818cf8"></i>
             </div>
             <div>
-              <p class="text-zinc-500 text-xs font-medium uppercase tracking-wider">Total vendido</p>
+              <p class="text-zinc-500 text-xs font-medium uppercase tracking-wider">Vendido</p>
               <p class="text-xl font-bold text-white mt-1">
-                {{ stats().totalVendido | currency:'COP':'$ ':'1.0-0' }}
+                {{ statsMes().vendido | currency:'COP':'$ ':'1.0-0' }}
               </p>
+              <p class="text-zinc-600 text-xs mt-0.5">{{ statsMes().nCompras }} compras</p>
+            </div>
+          </div>
+
+          <div class="stat-card" style="opacity:0">
+            <div class="stat-icon" style="background: rgb(34 197 94 / 0.1)">
+              <i class="pi pi-check-circle" style="color: #4ade80"></i>
+            </div>
+            <div>
+              <p class="text-zinc-500 text-xs font-medium uppercase tracking-wider">Cobrado</p>
+              <p class="text-xl font-bold text-green-400 mt-1">
+                {{ statsMes().cobrado | currency:'COP':'$ ':'1.0-0' }}
+              </p>
+              <p class="text-zinc-600 text-xs mt-0.5">{{ statsMes().nAbonos }} abonos</p>
             </div>
           </div>
 
@@ -111,20 +144,11 @@ import { MovimientoConCliente } from '../../core/models/movimiento.model';
               <i class="pi pi-clock" style="color: #fbbf24"></i>
             </div>
             <div>
-              <p class="text-zinc-500 text-xs font-medium uppercase tracking-wider">Pendiente</p>
+              <p class="text-zinc-500 text-xs font-medium uppercase tracking-wider">Pendiente total</p>
               <p class="text-xl font-bold text-amber-400 mt-1">
                 {{ stats().totalPendiente | currency:'COP':'$ ':'1.0-0' }}
               </p>
-            </div>
-          </div>
-
-          <div class="stat-card" style="opacity:0">
-            <div class="stat-icon" style="background: rgb(34 197 94 / 0.1)">
-              <i class="pi pi-users" style="color: #4ade80"></i>
-            </div>
-            <div>
-              <p class="text-zinc-500 text-xs font-medium uppercase tracking-wider">Clientes</p>
-              <p class="text-xl font-bold text-white mt-1">{{ stats().clientesActivos }}</p>
+              <p class="text-zinc-600 text-xs mt-0.5">{{ stats().clientesPendientes }} clientes</p>
             </div>
           </div>
         </div>
@@ -141,11 +165,8 @@ import { MovimientoConCliente } from '../../core/models/movimiento.model';
                 </span>
                 Mayor deuda
               </h3>
-              <a routerLink="/admin/clientes" class="text-indigo-400 text-xs hover:text-indigo-300">
-                Ver todos →
-              </a>
+              <a routerLink="/admin/clientes" class="text-indigo-400 text-xs hover:text-indigo-300">Ver todos →</a>
             </div>
-
             @if (topDeudores().length === 0) {
               <div class="text-center py-10">
                 <i class="pi pi-check-circle text-3xl text-green-500/40 block mb-2"></i>
@@ -173,41 +194,34 @@ import { MovimientoConCliente } from '../../core/models/movimiento.model';
             }
           </div>
 
-          <!-- Últimos movimientos -->
+          <!-- Movimientos del mes -->
           <div class="card-dark">
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-white font-semibold text-sm flex items-center gap-2">
                 <span class="w-6 h-6 bg-indigo-500/15 rounded-lg flex items-center justify-center">
                   <i class="pi pi-history text-indigo-400 text-xs"></i>
                 </span>
-                Últimos movimientos
+                Movimientos · {{ nombreMes() }}
               </h3>
             </div>
-
-            @if (movimientos().length === 0) {
+            @if (movsDelMes().length === 0) {
               <div class="text-center py-10">
                 <i class="pi pi-inbox text-3xl text-zinc-700 block mb-2"></i>
-                <p class="text-zinc-500 text-sm">Sin movimientos</p>
+                <p class="text-zinc-500 text-sm">Sin movimientos este mes</p>
               </div>
             } @else {
-              <div class="space-y-0.5">
-                @for (m of movimientos(); track m.id) {
+              <div class="space-y-0.5 max-h-72 overflow-y-auto">
+                @for (m of movsDelMes(); track m.id) {
                   <div class="list-row">
                     <div class="flex items-center gap-3 min-w-0 flex-1">
                       <div class="mov-icon"
-                           [style]="m.tipo === 'COMPRA'
-                             ? 'background: rgb(239 68 68 / 0.1)'
-                             : 'background: rgb(34 197 94 / 0.1)'">
+                           [style]="m.tipo === 'COMPRA' ? 'background:rgb(239 68 68/0.1)' : 'background:rgb(34 197 94/0.1)'">
                         <i [class]="m.tipo === 'COMPRA' ? 'pi pi-shopping-cart' : 'pi pi-check'"
                            [style]="m.tipo === 'COMPRA' ? 'color:#f87171' : 'color:#4ade80'"></i>
                       </div>
                       <div class="min-w-0">
-                        <p class="text-white text-sm font-medium truncate">
-                          {{ m.clientes?.nombre ?? '—' }}
-                        </p>
-                        <p class="text-zinc-500 text-xs truncate">
-                          {{ m.descripcion || m.tipo }}
-                        </p>
+                        <p class="text-white text-sm font-medium truncate">{{ m.clientes?.nombre ?? '—' }}</p>
+                        <p class="text-zinc-500 text-xs truncate">{{ m.descripcion || m.tipo }}</p>
                       </div>
                     </div>
                     <div class="ml-3 text-right shrink-0">
@@ -234,12 +248,40 @@ export class DashboardComponent implements OnInit {
 
   cargando = signal(true);
   clientes = signal<SaldoCliente[]>([]);
-  movimientos = signal<MovimientoConCliente[]>([]);
+  todosMovs = signal<MovimientoConCliente[]>([]);
+
+  mesDash = signal({ mes: new Date().getMonth() + 1, anio: new Date().getFullYear() });
+
+  nombreMes = computed(() => MESES_NOMBRE[this.mesDash().mes - 1]);
+
+  esMesActual = computed(() => {
+    const hoy = new Date();
+    return this.mesDash().mes === hoy.getMonth() + 1 && this.mesDash().anio === hoy.getFullYear();
+  });
+
+  movsDelMes = computed(() => {
+    const { mes, anio } = this.mesDash();
+    return this.todosMovs().filter(m => {
+      const f = new Date(m.fecha);
+      return f.getMonth() + 1 === mes && f.getFullYear() === anio;
+    });
+  });
+
+  statsMes = computed(() => {
+    const movs = this.movsDelMes();
+    const compras = movs.filter(m => m.tipo === 'COMPRA');
+    const abonos  = movs.filter(m => m.tipo === 'ABONO');
+    return {
+      vendido:  compras.reduce((s, m) => s + m.monto, 0),
+      cobrado:  abonos.reduce((s, m)  => s + m.monto, 0),
+      nCompras: compras.length,
+      nAbonos:  abonos.length,
+    };
+  });
 
   stats = computed(() => ({
-    totalVendido: this.clientes().reduce((s, c) => s + c.total_compras, 0),
     totalPendiente: this.clientes().filter(c => c.saldo > 0).reduce((s, c) => s + c.saldo, 0),
-    clientesActivos: this.clientes().filter(c => c.activo).length
+    clientesPendientes: this.clientes().filter(c => c.saldo > 0 && c.activo).length,
   }));
 
   topDeudores = computed(() =>
@@ -249,8 +291,18 @@ export class DashboardComponent implements OnInit {
       .slice(0, 6)
   );
 
+  mesAnterior() {
+    const { mes, anio } = this.mesDash();
+    this.mesDash.set(mes === 1 ? { mes: 12, anio: anio - 1 } : { mes: mes - 1, anio });
+  }
+
+  mesSiguiente() {
+    if (this.esMesActual()) return;
+    const { mes, anio } = this.mesDash();
+    this.mesDash.set(mes === 12 ? { mes: 1, anio: anio + 1 } : { mes: mes + 1, anio });
+  }
+
   constructor() {
-    // Animate stats + panels once data loads
     effect(() => {
       if (!this.cargando()) {
         setTimeout(() => {
@@ -265,10 +317,10 @@ export class DashboardComponent implements OnInit {
     try {
       const [clientes, movs] = await Promise.all([
         this.clientesSvc.getAll(),
-        this.movSvc.getRecientes(8)
+        this.movSvc.getAllConClientes()
       ]);
       this.clientes.set(clientes);
-      this.movimientos.set(movs);
+      this.todosMovs.set(movs);
     } finally {
       this.cargando.set(false);
     }

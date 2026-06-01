@@ -259,11 +259,7 @@ export class PdfService {
               ),
             ],
           },
-          {
-            width: 1,
-            canvas: [{ type: 'line', x1: 0, y1: 0, x2: 0, y2: 60, lineWidth: 1, lineColor: C.primaryBorder }],
-            margin: [18, 0, 18, 0],
-          },
+          { width: 24, text: '' },
           {
             width: '*',
             stack: [

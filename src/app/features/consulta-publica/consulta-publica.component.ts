@@ -6,6 +6,7 @@ import { MovimientosService } from '../../core/services/movimientos.service';
 import { StorageService } from '../../core/services/storage.service';
 import { SolicitudesPagoService } from '../../core/services/solicitudes-pago.service';
 import { AnimationService } from '../../core/services/animation.service';
+import { PdfService } from '../../core/services/pdf.service';
 import { SaldoCliente } from '../../core/models/cliente.model';
 import { Movimiento } from '../../core/models/movimiento.model';
 import { SolicitudPago } from '../../core/services/solicitudes-pago.service';
@@ -187,6 +188,19 @@ import { SolicitudPago } from '../../core/services/solicitudes-pago.service';
                 </div>
               </div>
             </div>
+
+            <!-- Descargar factura si tiene deuda -->
+            @if (clienteSeleccionado()!.saldo > 0) {
+              <button (click)="descargarFactura()"
+                      [disabled]="descargandoPdf()"
+                      class="search-btn mb-4" style="width:100%; justify-content:center; background:#4f46e5">
+                @if (descargandoPdf()) {
+                  <i class="pi pi-spinner pi-spin"></i> Generando...
+                } @else {
+                  <i class="pi pi-download"></i> Descargar mi estado de cuenta
+                }
+              </button>
+            }
 
             <!-- Estado de solicitud existente -->
             @if (ultimaSolicitud() && !enviado()) {
@@ -494,6 +508,7 @@ export class ConsultaPublicaComponent {
   private storageSvc = inject(StorageService);
   private solicitudesSvc = inject(SolicitudesPagoService);
   private anim = inject(AnimationService);
+  private pdfSvc = inject(PdfService);
 
   busqueda = '';
   buscado = signal(false);
@@ -534,6 +549,26 @@ export class ConsultaPublicaComponent {
   pinInput = '';
   pinError = signal('');
   clientePendientePin: SaldoCliente | null = null;
+
+  descargandoPdf = signal(false);
+
+  async descargarFactura() {
+    const cliente = this.clienteSeleccionado();
+    if (!cliente) return;
+    this.descargandoPdf.set(true);
+    try {
+      const hoy = new Date();
+      const blob = await this.pdfSvc.generarFactura(cliente, this.movimientos(), hoy.getMonth() + 1, hoy.getFullYear());
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Estado_cuenta_${cliente.nombre.replace(/\s+/g, '_')}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch { } finally {
+      this.descargandoPdf.set(false);
+    }
+  }
 
   // Payment state
   tipoPago: 'TOTAL' | 'ABONO' = 'TOTAL';
