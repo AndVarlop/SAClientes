@@ -51,8 +51,7 @@ export class InventarioService {
     const { data, error } = await this.sb
       .from('movimientos_inv')
       .select('*, productos(nombre, unidad), clientes(nombre)')
-      .order('fecha', { ascending: false })
-      .limit(100);
+      .order('fecha', { ascending: false });
     if (error) throw error;
     return (data ?? []) as MovimientoInv[];
   }

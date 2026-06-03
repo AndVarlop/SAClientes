@@ -144,11 +144,11 @@ const MESES_NOMBRE = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
               <i class="pi pi-clock" style="color: #fbbf24"></i>
             </div>
             <div>
-              <p class="text-zinc-500 text-xs font-medium uppercase tracking-wider">Pendiente total</p>
+              <p class="text-zinc-500 text-xs font-medium uppercase tracking-wider">Pendiente mes</p>
               <p class="text-xl font-bold text-amber-400 mt-1">
-                {{ stats().totalPendiente | currency:'COP':'$ ':'1.0-0' }}
+                {{ pendienteMes() | currency:'COP':'$ ':'1.0-0' }}
               </p>
-              <p class="text-zinc-600 text-xs mt-0.5">{{ stats().clientesPendientes }} clientes</p>
+              <p class="text-zinc-600 text-xs mt-0.5">{{ clientesPendientesMes() }} clientes</p>
             </div>
           </div>
         </div>
@@ -279,10 +279,15 @@ export class DashboardComponent implements OnInit {
     };
   });
 
-  stats = computed(() => ({
-    totalPendiente: this.clientes().filter(c => c.saldo > 0).reduce((s, c) => s + c.saldo, 0),
-    clientesPendientes: this.clientes().filter(c => c.saldo > 0 && c.activo).length,
-  }));
+  pendienteMes = computed(() => {
+    const m = this.statsMes();
+    return Math.max(0, m.vendido - m.cobrado);
+  });
+
+  clientesPendientesMes = computed(() => {
+    const movs = this.movsDelMes();
+    return new Set(movs.filter(m => m.tipo === 'COMPRA').map(m => m.cliente_id)).size;
+  });
 
   topDeudores = computed(() =>
     [...this.clientes()]

@@ -16,6 +16,9 @@ import { SelectModule } from 'primeng/select';
 import { TextareaModule } from 'primeng/textarea';
 import { ChartModule } from 'primeng/chart';
 
+const MESES_NOMBRE = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                      'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
 type Tab = 'productos' | 'movimientos' | 'ganancias';
 type ModoMov = 'ENTRADA' | 'SALIDA';
 
@@ -166,14 +169,26 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
 
         <!-- ── TAB: PRODUCTOS ── -->
         @if (tab() === 'productos') {
-          @if (productos().length === 0) {
+          <div class="flex gap-2 mb-4">
+            <button class="chip-sel" [class.chip-activo]="filtroEstado() === 'activos'"
+                    (click)="filtroEstado.set('activos')">
+              <i class="pi pi-check-circle mr-1"></i>Activos
+            </button>
+            <button class="chip-sel" [class.chip-activo]="filtroEstado() === 'inactivos'"
+                    (click)="filtroEstado.set('inactivos')">
+              <i class="pi pi-ban mr-1"></i>Inactivos
+            </button>
+            <button class="chip-sel" [class.chip-activo]="filtroEstado() === 'todos'"
+                    (click)="filtroEstado.set('todos')">Todos</button>
+          </div>
+          @if (productosFiltrados().length === 0) {
             <div class="card-dark text-center py-16">
               <i class="pi pi-box text-4xl text-zinc-700 block mb-3"></i>
               <p class="text-zinc-400">Sin productos. Agrega uno.</p>
             </div>
           } @else {
             <div class="flex flex-col gap-2">
-              @for (p of productos(); track p.id) {
+              @for (p of productosFiltrados(); track p.id) {
                 <div class="prod-row" [style]="!p.activo ? 'opacity:0.5' : ''">
                   <div class="min-w-0 flex-1">
                     <div class="flex items-center gap-2 mb-0.5">
@@ -351,6 +366,26 @@ type ModoMov = 'ENTRADA' | 'SALIDA';
             <div style="height:240px">
               <p-chart type="bar" [data]="chartData()" [options]="chartOptions" height="240" />
             </div>
+          </div>
+
+          <!-- Navegador de mes -->
+          <div class="flex items-center justify-center gap-4 mb-5
+                      bg-zinc-900 border border-zinc-800 rounded-2xl py-3 px-5">
+            <button (click)="mesGananciasAnterior()"
+                    class="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700
+                           flex items-center justify-center text-zinc-400 hover:text-white transition-colors">
+              <i class="pi pi-chevron-left text-xs"></i>
+            </button>
+            <span class="text-white font-semibold text-base min-w-44 text-center">
+              {{ nombreMesGanancias() }} {{ mesGanancias().anio }}
+            </span>
+            <button (click)="mesGananciasSiguiente()" [disabled]="esMesActualGanancias()"
+                    class="w-8 h-8 rounded-lg border flex items-center justify-center transition-colors"
+                    [class]="esMesActualGanancias()
+                      ? 'bg-zinc-900 border-zinc-800 text-zinc-700 cursor-not-allowed'
+                      : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-zinc-400 hover:text-white'">
+              <i class="pi pi-chevron-right text-xs"></i>
+            </button>
           </div>
 
           <!-- Stats globales -->
@@ -728,6 +763,15 @@ export class InventarioComponent implements OnInit {
   pagMov = signal(1);
   pagStats = signal(1);
 
+  filtroEstado = signal<'activos' | 'inactivos' | 'todos'>('activos');
+
+  productosFiltrados = computed(() => {
+    const all = this.productos();
+    if (this.filtroEstado() === 'activos') return all.filter(p => p.activo);
+    if (this.filtroEstado() === 'inactivos') return all.filter(p => !p.activo);
+    return [...all].sort((a, b) => (b.activo ? 1 : 0) - (a.activo ? 1 : 0));
+  });
+
   productosActivos = computed(() => this.productos().filter(p => p.activo));
 
   productosParaSelector = computed(() =>
@@ -801,8 +845,34 @@ export class InventarioComponent implements OnInit {
     Math.max(1, Math.ceil(this.movimientosFiltrados().length / this.PAGE_SIZE))
   );
 
+  mesGanancias = signal({ mes: new Date().getMonth() + 1, anio: new Date().getFullYear() });
+  nombreMesGanancias = computed(() => MESES_NOMBRE[this.mesGanancias().mes - 1]);
+  esMesActualGanancias = computed(() => {
+    const hoy = new Date();
+    return this.mesGanancias().mes === hoy.getMonth() + 1 && this.mesGanancias().anio === hoy.getFullYear();
+  });
+  movimientosMes = computed(() => {
+    const { mes, anio } = this.mesGanancias();
+    return this.movimientos().filter(m => {
+      const f = new Date(m.fecha);
+      return f.getMonth() + 1 === mes && f.getFullYear() === anio;
+    });
+  });
+
+  mesGananciasAnterior() {
+    const { mes, anio } = this.mesGanancias();
+    this.mesGanancias.set(mes === 1 ? { mes: 12, anio: anio - 1 } : { mes: mes - 1, anio });
+    this.pagStats.set(1);
+  }
+  mesGananciasSiguiente() {
+    if (this.esMesActualGanancias()) return;
+    const { mes, anio } = this.mesGanancias();
+    this.mesGanancias.set(mes === 12 ? { mes: 1, anio: anio + 1 } : { mes: mes + 1, anio });
+    this.pagStats.set(1);
+  }
+
   stats = computed(() => {
-    const movs = this.movimientos();
+    const movs = this.movimientosMes();
     const invertido = movs.filter(m => m.tipo === 'ENTRADA')
       .reduce((s, m) => s + m.cantidad * m.precio_unit, 0);
     const vendido = movs.filter(m => m.tipo === 'SALIDA')
@@ -811,7 +881,7 @@ export class InventarioComponent implements OnInit {
   });
 
   statsProductos = computed(() => {
-    const movs = this.movimientos();
+    const movs = this.movimientosMes();
     const map = new Map<string, { nombre: string; invertido: number; vendido: number }>();
     movs.forEach(m => {
       const nombre = m.productos?.nombre ?? m.producto_id;
