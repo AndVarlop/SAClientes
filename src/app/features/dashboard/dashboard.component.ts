@@ -289,12 +289,21 @@ export class DashboardComponent implements OnInit {
     return new Set(movs.filter(m => m.tipo === 'COMPRA').map(m => m.cliente_id)).size;
   });
 
-  topDeudores = computed(() =>
-    [...this.clientes()]
-      .filter(c => c.saldo > 0 && c.activo)
+  topDeudores = computed(() => {
+    const movs = this.movsDelMes();
+    const map = new Map<string, number>();
+    movs.forEach(m => {
+      map.set(m.cliente_id, (map.get(m.cliente_id) ?? 0) + (m.tipo === 'COMPRA' ? m.monto : -m.monto));
+    });
+    return [...map.entries()]
+      .filter(([, saldo]) => saldo > 0)
+      .map(([id, saldo]) => {
+        const c = this.clientes().find(x => x.id === id);
+        return { id, nombre: c?.nombre ?? '—', telefono: c?.telefono, saldo };
+      })
       .sort((a, b) => b.saldo - a.saldo)
-      .slice(0, 6)
-  );
+      .slice(0, 6);
+  });
 
   mesAnterior() {
     const { mes, anio } = this.mesDash();

@@ -1,4 +1,7 @@
 ﻿import { Component, inject, signal, computed, OnInit, input, effect } from '@angular/core';
+
+const MESES_NOMBRE = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                      'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { FormBuilder, ReactiveFormsModule, FormsModule, Validators } from '@angular/forms';
@@ -205,20 +208,37 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
 
         <!-- Historial -->
         <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
-          <h3 class="text-white font-semibold text-sm mb-4 flex items-center gap-2">
-            <span class="w-6 h-6 bg-indigo-500/15 rounded-lg flex items-center justify-center">
-              <i class="pi pi-history text-indigo-400 text-xs"></i>
-            </span>
-            Historial
-            <span class="text-zinc-600 text-xs font-normal ml-1">
-              · pasa el cursor para eliminar
-            </span>
-          </h3>
+          <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <h3 class="text-white font-semibold text-sm flex items-center gap-2">
+              <span class="w-6 h-6 bg-indigo-500/15 rounded-lg flex items-center justify-center">
+                <i class="pi pi-history text-indigo-400 text-xs"></i>
+              </span>
+              Historial
+              <span class="text-zinc-600 text-xs font-normal">· pasa el cursor para eliminar</span>
+            </h3>
+            <div class="flex items-center gap-2">
+              <button (click)="mesHistorialAnterior()"
+                      class="w-7 h-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700
+                             flex items-center justify-center text-zinc-400 hover:text-white transition-colors">
+                <i class="pi pi-chevron-left text-xs"></i>
+              </button>
+              <span class="text-white text-sm font-semibold min-w-36 text-center">
+                {{ nombreMesHistorial() }} {{ mesHistorial().anio }}
+              </span>
+              <button (click)="mesHistorialSiguiente()" [disabled]="esMesActualHistorial()"
+                      class="w-7 h-7 rounded-lg border flex items-center justify-center transition-colors"
+                      [class]="esMesActualHistorial()
+                        ? 'bg-zinc-900 border-zinc-800 text-zinc-700 cursor-not-allowed'
+                        : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-zinc-400 hover:text-white'">
+                <i class="pi pi-chevron-right text-xs"></i>
+              </button>
+            </div>
+          </div>
 
-          @if (movimientos().length === 0) {
-            <p class="text-zinc-500 text-sm text-center py-8">Sin movimientos</p>
+          @if (movimientosMes().length === 0) {
+            <p class="text-zinc-500 text-sm text-center py-8">Sin movimientos en este mes</p>
           } @else {
-            @for (m of movimientos(); track m.id) {
+            @for (m of movimientosMes(); track m.id) {
               <div class="mov-row">
                 <div class="flex items-start gap-3 min-w-0 flex-1">
                   <div class="mov-dot"
@@ -459,6 +479,30 @@ export class ClienteDetalleComponent implements OnInit {
   cliente = signal<SaldoCliente | null>(null);
   movimientos = signal<Movimiento[]>([]);
   productos = signal<Producto[]>([]);
+
+  mesHistorial = signal({ mes: new Date().getMonth() + 1, anio: new Date().getFullYear() });
+  nombreMesHistorial = computed(() => MESES_NOMBRE[this.mesHistorial().mes - 1]);
+  esMesActualHistorial = computed(() => {
+    const hoy = new Date();
+    return this.mesHistorial().mes === hoy.getMonth() + 1 && this.mesHistorial().anio === hoy.getFullYear();
+  });
+  movimientosMes = computed(() => {
+    const { mes, anio } = this.mesHistorial();
+    return this.movimientos().filter(m => {
+      const f = new Date(m.fecha);
+      return f.getMonth() + 1 === mes && f.getFullYear() === anio;
+    });
+  });
+
+  mesHistorialAnterior() {
+    const { mes, anio } = this.mesHistorial();
+    this.mesHistorial.set(mes === 1 ? { mes: 12, anio: anio - 1 } : { mes: mes - 1, anio });
+  }
+  mesHistorialSiguiente() {
+    if (this.esMesActualHistorial()) return;
+    const { mes, anio } = this.mesHistorial();
+    this.mesHistorial.set(mes === 12 ? { mes: 1, anio: anio + 1 } : { mes: mes + 1, anio });
+  }
   carrito = signal<Partial<Record<string, number>>>({});
 
   precioEfectivo(p: Producto): number {
