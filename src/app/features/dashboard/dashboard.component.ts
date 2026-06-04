@@ -6,6 +6,7 @@ import { MovimientosService } from '../../core/services/movimientos.service';
 import { AnimationService } from '../../core/services/animation.service';
 import { SaldoCliente } from '../../core/models/cliente.model';
 import { MovimientoConCliente } from '../../core/models/movimiento.model';
+import { ChartModule } from 'primeng/chart';
 
 const MESES_NOMBRE = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
                        'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -13,7 +14,7 @@ const MESES_NOMBRE = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CurrencyPipe, DatePipe, RouterLink],
+  imports: [CurrencyPipe, DatePipe, RouterLink, ChartModule],
   styles: [`
     .stat-card {
       background: #18181b;
@@ -101,6 +102,28 @@ const MESES_NOMBRE = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
         </button>
       </div>
 
+      <!-- Alerta deuda vencida (+30 días) -->
+      @if (!cargando() && deudaVencida().length > 0) {
+        <div class="mb-5 rounded-2xl border border-red-500/25 bg-red-950/20 px-4 py-3">
+          <div class="flex items-center gap-2 mb-2">
+            <i class="pi pi-exclamation-circle text-red-400 text-sm"></i>
+            <p class="text-red-300 font-semibold text-sm">
+              {{ deudaVencida().length }} cliente{{ deudaVencida().length > 1 ? 's' : '' }} sin actividad +30 días
+            </p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            @for (c of deudaVencida(); track c.id) {
+              <a [routerLink]="['/admin/clientes', c.id]"
+                 class="flex items-center gap-1.5 bg-red-500/10 border border-red-500/20
+                        rounded-lg px-2.5 py-1 text-xs text-red-300 hover:bg-red-500/20 transition-colors">
+                <span class="font-medium">{{ c.nombre }}</span>
+                <span class="text-red-400 font-bold">{{ c.saldo | currency:'COP':'$ ':'1.0-0' }}</span>
+              </a>
+            }
+          </div>
+        </div>
+      }
+
       @if (cargando()) {
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-7">
           @for (i of [1,2,3]; track i) { <div class="skeleton h-24"></div> }
@@ -150,6 +173,19 @@ const MESES_NOMBRE = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
               </p>
               <p class="text-zinc-600 text-xs mt-0.5">{{ clientesPendientesMes() }} clientes</p>
             </div>
+          </div>
+        </div>
+
+        <!-- Gráfica 6 meses -->
+        <div class="card-dark mb-5">
+          <p class="text-white font-semibold text-sm flex items-center gap-2 mb-4">
+            <span class="w-6 h-6 bg-indigo-500/15 rounded-lg flex items-center justify-center">
+              <i class="pi pi-chart-bar text-indigo-400 text-xs"></i>
+            </span>
+            Ventas vs Cobros · últimos 6 meses
+          </p>
+          <div style="height:200px">
+            <p-chart type="bar" [data]="chart6Meses()" [options]="chartOpts" height="200" />
           </div>
         </div>
 
@@ -288,6 +324,58 @@ export class DashboardComponent implements OnInit {
     const movs = this.movsDelMes();
     return new Set(movs.filter(m => m.tipo === 'COMPRA').map(m => m.cliente_id)).size;
   });
+
+  deudaVencida = computed(() => {
+    const movs = this.todosMovs();
+    const hoy = Date.now();
+    const umbral = 30 * 24 * 60 * 60 * 1000;
+    const ultimoMov = new Map<string, number>();
+    movs.forEach(m => {
+      const t = new Date(m.fecha).getTime();
+      if (!ultimoMov.has(m.cliente_id) || t > ultimoMov.get(m.cliente_id)!) ultimoMov.set(m.cliente_id, t);
+    });
+    return this.clientes()
+      .filter(c => c.saldo > 0 && c.activo)
+      .filter(c => {
+        const last = ultimoMov.get(c.id);
+        return !last || (hoy - last) > umbral;
+      })
+      .sort((a, b) => b.saldo - a.saldo)
+      .slice(0, 5);
+  });
+
+  chart6Meses = computed(() => {
+    const movs = this.todosMovs();
+    const hoy = new Date();
+    const labels: string[] = [];
+    const ventas: number[] = [];
+    const cobros: number[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+      const mes = d.getMonth() + 1;
+      const anio = d.getFullYear();
+      labels.push(MESES_NOMBRE[d.getMonth()].slice(0, 3));
+      const del = movs.filter(m => { const f = new Date(m.fecha); return f.getMonth() + 1 === mes && f.getFullYear() === anio; });
+      ventas.push(del.filter(m => m.tipo === 'COMPRA').reduce((s, m) => s + m.monto, 0));
+      cobros.push(del.filter(m => m.tipo === 'ABONO').reduce((s, m) => s + m.monto, 0));
+    }
+    return {
+      labels,
+      datasets: [
+        { label: 'Ventas', data: ventas, backgroundColor: 'rgba(239,68,68,0.6)', borderColor: '#ef4444', borderWidth: 1, borderRadius: 6 },
+        { label: 'Cobros', data: cobros, backgroundColor: 'rgba(34,197,94,0.6)', borderColor: '#22c55e', borderWidth: 1, borderRadius: 6 }
+      ]
+    };
+  });
+
+  chartOpts = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#a1a1aa', font: { size: 11 } } } },
+    scales: {
+      x: { ticks: { color: '#71717a' }, grid: { color: 'rgba(39,39,42,0.6)' } },
+      y: { ticks: { color: '#71717a', callback: (v: number) => '$' + (v/1000).toFixed(0) + 'k' }, grid: { color: 'rgba(39,39,42,0.6)' } }
+    }
+  };
 
   topDeudores = computed(() => {
     const movs = this.movsDelMes();

@@ -35,7 +35,8 @@
     "primeng": "^21.1.8",
     "rxjs": "~7.8.0",
     "splitting": "^1.1.0",
-    "tslib": "^2.3.0"
+    "tslib": "^2.3.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@angular/build": "^21.2.7",

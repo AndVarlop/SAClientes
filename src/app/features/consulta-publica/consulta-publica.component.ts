@@ -1,4 +1,12 @@
-import { Component, computed, inject, signal, afterNextRender, effect } from '@angular/core';
+import { Component, computed, inject, signal, afterNextRender, effect, OnDestroy } from '@angular/core';
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
+
+const MESES_NOMBRE = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                      'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 import { FormsModule } from '@angular/forms';
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { ClientesService } from '../../core/services/clientes.service';
@@ -162,9 +170,22 @@ import { SolicitudPago } from '../../core/services/solicitudes-pago.service';
             <!-- Saldo card -->
             <div style="background:linear-gradient(135deg,#1a1040,#18181b); border:1px solid #3730a3; border-radius:20px; padding:24px"
                  class="mb-4">
-              <p class="text-indigo-300 text-xs font-semibold uppercase tracking-widest">
-                {{ clienteSeleccionado()!.nombre }}
-              </p>
+              <div class="flex items-center gap-3 mb-3">
+                @if (clienteSeleccionado()!.foto_url) {
+                  <img [src]="clienteSeleccionado()!.foto_url!" alt=""
+                       style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid #6366f1;flex-shrink:0">
+                } @else {
+                  <div style="width:48px;height:48px;border-radius:50%;background:#27272a;flex-shrink:0;
+                              display:flex;align-items:center;justify-content:center;border:2px solid #3730a3;
+                              color:#818cf8;font-weight:700;font-size:20px">
+                    {{ clienteSeleccionado()!.nombre.charAt(0).toUpperCase() }}
+                  </div>
+                }
+                <div>
+                  <p class="text-indigo-300 text-xs font-semibold uppercase tracking-widest">Tu cuenta</p>
+                  <p class="text-white font-bold text-base leading-tight">{{ clienteSeleccionado()!.nombre }}</p>
+                </div>
+              </div>
               <p class="text-4xl font-bold mt-2"
                  [style]="clienteSeleccionado()!.saldo > 0 ? 'color:#fbbf24' : 'color:#4ade80'">
                 {{ clienteSeleccionado()!.saldo | currency:'COP':'$ ':'1.0-0' }}
@@ -188,6 +209,40 @@ import { SolicitudPago } from '../../core/services/solicitudes-pago.service';
                 </div>
               </div>
             </div>
+
+            <!-- Resumen del mes -->
+            <div style="background:#18181b; border:1px solid #27272a; border-radius:16px; padding:16px"
+                 class="mb-4">
+              <p class="text-zinc-500 text-xs font-semibold uppercase tracking-wider mb-3">
+                Este mes · {{ nombreMesActual() }}
+              </p>
+              <div class="grid grid-cols-3 gap-3 text-center">
+                <div>
+                  <p class="text-red-400 font-bold text-base">{{ resumenMes().compras | currency:'COP':'$ ':'1.0-0' }}</p>
+                  <p class="text-zinc-600 text-xs mt-0.5">Compras</p>
+                </div>
+                <div>
+                  <p class="text-green-400 font-bold text-base">{{ resumenMes().abonos | currency:'COP':'$ ':'1.0-0' }}</p>
+                  <p class="text-zinc-600 text-xs mt-0.5">Abonos</p>
+                </div>
+                <div>
+                  <p class="font-bold text-base"
+                     [style]="resumenMes().pendiente > 0 ? 'color:#fbbf24' : 'color:#4ade80'">
+                    {{ resumenMes().pendiente | currency:'COP':'$ ':'1.0-0' }}
+                  </p>
+                  <p class="text-zinc-600 text-xs mt-0.5">Pendiente</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Botón recordatorio WhatsApp -->
+            @if (clienteSeleccionado()!.telefono && clienteSeleccionado()!.saldo > 0) {
+              <button (click)="recordatorioWhatsApp()"
+                      class="search-btn mb-4"
+                      style="width:100%; justify-content:center; background:#16a34a">
+                <i class="pi pi-whatsapp"></i> Recordarme mi deuda por WhatsApp
+              </button>
+            }
 
             <!-- Descargar factura si tiene deuda -->
             @if (clienteSeleccionado()!.saldo > 0) {
@@ -349,17 +404,47 @@ import { SolicitudPago } from '../../core/services/solicitudes-pago.service';
 
             <!-- Historial con detalle expandible -->
             <div style="background:#18181b; border:1px solid #27272a; border-radius:16px; padding:20px">
-              <h3 class="text-white font-semibold text-sm mb-1">Historial de movimientos</h3>
-              <p class="text-zinc-600 text-xs mb-4">Toca un movimiento para ver el detalle</p>
+              <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <h3 class="text-white font-semibold text-sm">Historial de movimientos</h3>
+                <div class="flex items-center gap-1.5">
+                  <button (click)="mesHistAnterior()"
+                          style="width:28px;height:28px;border-radius:8px;background:#27272a;border:1px solid #3f3f46;
+                                 color:#a1a1aa;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px">
+                    ←
+                  </button>
+                  <span class="text-white text-xs font-semibold min-w-28 text-center">
+                    {{ nombreMesHist() }} {{ mesHistorial().anio }}
+                  </span>
+                  <button (click)="mesHistSiguiente()" [disabled]="esMesActualHist()"
+                          style="width:28px;height:28px;border-radius:8px;background:#27272a;border:1px solid #3f3f46;
+                                 cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px"
+                          [style.color]="esMesActualHist() ? '#3f3f46' : '#a1a1aa'">
+                    →
+                  </button>
+                </div>
+              </div>
+
+              <!-- Filtro tipo -->
+              <div class="flex gap-2 mb-4">
+                @for (f of filtrosTipo; track f.valor) {
+                  <button (click)="filtroTipo.set(f.valor)"
+                          style="flex:1;padding:7px;border-radius:9px;font-size:12px;font-weight:600;border:1px solid #27272a;cursor:pointer;transition:all 0.15s"
+                          [style.background]="filtroTipo() === f.valor ? 'rgb(99 102 241/0.15)' : '#111'"
+                          [style.border-color]="filtroTipo() === f.valor ? '#6366f1' : '#27272a'"
+                          [style.color]="filtroTipo() === f.valor ? 'white' : '#71717a'">
+                    {{ f.label }}
+                  </button>
+                }
+              </div>
 
               @if (cargandoMovs()) {
                 <div class="text-center py-8 text-zinc-500 text-sm">
                   <i class="pi pi-spinner pi-spin block text-2xl mb-2"></i> Cargando...
                 </div>
-              } @else if (movimientos().length === 0) {
-                <p class="text-zinc-500 text-sm text-center py-6">Sin movimientos</p>
+              } @else if (movimientosFiltrados().length === 0) {
+                <p class="text-zinc-500 text-sm text-center py-6">Sin movimientos en este período</p>
               } @else {
-                @for (m of movimientos(); track m.id) {
+                @for (m of movimientosFiltrados(); track m.id) {
                   <!-- Fila principal del movimiento -->
                   <div class="mov-row" (click)="toggleDetalle(m.id)">
                     <div class="flex items-center justify-between">
@@ -451,6 +536,32 @@ import { SolicitudPago } from '../../core/services/solicitudes-pago.service';
           </div>
         }
 
+        <!-- PWA install banner -->
+        @if (pwaPrompt()) {
+          <div style="background:#18181b; border:1px solid #3730a3; border-radius:16px; padding:16px"
+               class="mt-5 flex items-center gap-3">
+            <div style="width:40px;height:40px;background:rgb(99 102 241/0.15);border-radius:12px;flex-shrink:0;
+                        display:flex;align-items:center;justify-content:center">
+              <i class="pi pi-mobile" style="color:#818cf8"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-white text-sm font-semibold">Agregar a pantalla de inicio</p>
+              <p class="text-zinc-500 text-xs">Accede más rápido desde tu celular</p>
+            </div>
+            <div class="flex gap-2 shrink-0">
+              <button (click)="instalarPWA()"
+                      style="background:#6366f1;color:white;border:none;border-radius:9px;
+                             padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer">
+                Instalar
+              </button>
+              <button (click)="pwaPrompt.set(null)"
+                      style="background:transparent;color:#52525b;border:none;cursor:pointer;font-size:18px;padding:4px 8px">
+                ×
+              </button>
+            </div>
+          </div>
+        }
+
         <p class="text-center mt-8 text-zinc-700 text-xs">
           ¿Eres administradora?
           <a href="/login" style="color:#6366f1" class="ml-1 hover:underline">Iniciar sesión</a>
@@ -502,7 +613,7 @@ import { SolicitudPago } from '../../core/services/solicitudes-pago.service';
     }
   `
 })
-export class ConsultaPublicaComponent {
+export class ConsultaPublicaComponent implements OnDestroy {
   private clientesSvc = inject(ClientesService);
   private movSvc = inject(MovimientosService);
   private storageSvc = inject(StorageService);
@@ -528,11 +639,11 @@ export class ConsultaPublicaComponent {
 
   constructor() {
     afterNextRender(() => {
-      // Hero entrance
       this.anim.scaleIn('#hero-logo', 0);
       this.anim.fadeUp('#hero-title', 120);
       this.anim.fadeUp('#hero-sub', 220);
       this.anim.fadeUp('#search-box', 320);
+      window.addEventListener('beforeinstallprompt', this._pwaHandler);
     });
 
     // Animate results when they change
@@ -549,6 +660,86 @@ export class ConsultaPublicaComponent {
   pinInput = '';
   pinError = signal('');
   clientePendientePin: SaldoCliente | null = null;
+
+  // Mes historial
+  mesHistorial = signal({ mes: new Date().getMonth() + 1, anio: new Date().getFullYear() });
+  nombreMesHist = computed(() => MESES_NOMBRE[this.mesHistorial().mes - 1]);
+  nombreMesActual = computed(() => MESES_NOMBRE[new Date().getMonth()]);
+  esMesActualHist = computed(() => {
+    const hoy = new Date();
+    return this.mesHistorial().mes === hoy.getMonth() + 1 && this.mesHistorial().anio === hoy.getFullYear();
+  });
+
+  mesHistAnterior() {
+    const { mes, anio } = this.mesHistorial();
+    this.mesHistorial.set(mes === 1 ? { mes: 12, anio: anio - 1 } : { mes: mes - 1, anio });
+  }
+  mesHistSiguiente() {
+    if (this.esMesActualHist()) return;
+    const { mes, anio } = this.mesHistorial();
+    this.mesHistorial.set(mes === 12 ? { mes: 1, anio: anio + 1 } : { mes: mes + 1, anio });
+  }
+
+  // Filtro tipo
+  filtroTipo = signal<'TODOS' | 'COMPRA' | 'ABONO'>('TODOS');
+  readonly filtrosTipo = [
+    { valor: 'TODOS' as const, label: 'Todos' },
+    { valor: 'COMPRA' as const, label: 'Compras' },
+    { valor: 'ABONO' as const, label: 'Abonos' }
+  ];
+
+  movimientosFiltrados = computed(() => {
+    const { mes, anio } = this.mesHistorial();
+    const tipo = this.filtroTipo();
+    return this.movimientos().filter(m => {
+      const f = new Date(m.fecha);
+      const matchMes = f.getMonth() + 1 === mes && f.getFullYear() === anio;
+      const matchTipo = tipo === 'TODOS' || m.tipo === tipo;
+      return matchMes && matchTipo;
+    });
+  });
+
+  resumenMes = computed(() => {
+    const hoy = new Date();
+    const movs = this.movimientos().filter(m => {
+      const f = new Date(m.fecha);
+      return f.getMonth() + 1 === hoy.getMonth() + 1 && f.getFullYear() === hoy.getFullYear();
+    });
+    const compras = movs.filter(m => m.tipo === 'COMPRA').reduce((s, m) => s + m.monto, 0);
+    const abonos  = movs.filter(m => m.tipo === 'ABONO').reduce((s, m) => s + m.monto, 0);
+    return { compras, abonos, pendiente: Math.max(0, compras - abonos) };
+  });
+
+  // PWA
+  pwaPrompt = signal<BeforeInstallPromptEvent | null>(null);
+  private _pwaHandler = (e: Event) => {
+    e.preventDefault();
+    this.pwaPrompt.set(e as BeforeInstallPromptEvent);
+  };
+
+  instalarPWA() {
+    const prompt = this.pwaPrompt();
+    if (!prompt) return;
+    prompt.prompt();
+    prompt.userChoice.then(() => this.pwaPrompt.set(null));
+  }
+
+  ngOnDestroy() {
+    window.removeEventListener('beforeinstallprompt', this._pwaHandler);
+  }
+
+  recordatorioWhatsApp() {
+    const c = this.clienteSeleccionado();
+    if (!c?.telefono) return;
+    const tel = c.telefono.replace(/\D/g, '');
+    const fmt = (n: number) => n.toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
+    const texto = encodeURIComponent(
+`Hola ${c.nombre}! Te recuerdo que tienes un saldo pendiente de ${fmt(c.saldo)}.
+
+Puedes consultarlo en: ${window.location.origin}`
+    );
+    window.open(`https://wa.me/${tel}?text=${texto}`, '_blank');
+  }
 
   descargandoPdf = signal(false);
 

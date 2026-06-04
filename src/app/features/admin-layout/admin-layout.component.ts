@@ -1,14 +1,15 @@
-import { Component, inject, signal, afterNextRender } from '@angular/core';
+import { Component, inject, signal, afterNextRender, ViewChild } from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
 import { AnimationService } from '../../core/services/animation.service';
 import { AuthService } from '../../core/services/auth.service';
 import { Toast } from 'primeng/toast';
 import { ConfirmDialog } from 'primeng/confirmdialog';
+import { GlobalSearchComponent } from './global-search.component';
 
 @Component({
   selector: 'app-admin-layout',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, Toast, ConfirmDialog],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, Toast, ConfirmDialog, GlobalSearchComponent],
   styles: [`
     aside {
       background: #111113;
@@ -76,6 +77,7 @@ import { ConfirmDialog } from 'primeng/confirmdialog';
   template: `
     <p-toast position="top-right" />
     <p-confirmDialog />
+    <app-global-search #globalSearch />
 
     <div class="flex h-screen bg-zinc-950 overflow-hidden">
 
@@ -100,8 +102,20 @@ import { ConfirmDialog } from 'primeng/confirmdialog';
           </div>
         </div>
 
+        <!-- Search trigger -->
+        <div class="px-3 pb-3">
+          <button (click)="globalSearch.abrir()"
+                  class="w-full flex items-center gap-2 px-3 py-2 rounded-lg
+                         bg-zinc-900 border border-zinc-800 text-zinc-500 hover:text-zinc-300
+                         hover:border-zinc-700 transition-colors text-sm">
+            <i class="pi pi-search text-xs"></i>
+            <span class="flex-1 text-left">Buscar...</span>
+            <kbd class="text-zinc-700 text-xs font-mono">⌘K</kbd>
+          </button>
+        </div>
+
         <!-- Nav -->
-        <nav class="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+        <nav class="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
           <p class="text-zinc-600 text-[10px] uppercase tracking-widest font-semibold px-3 mb-2">
             Menú
           </p>
@@ -162,6 +176,8 @@ export class AdminLayoutComponent {
   private auth = inject(AuthService);
   private router = inject(Router);
   private anim = inject(AnimationService);
+
+  @ViewChild('globalSearch') globalSearch!: GlobalSearchComponent;
 
   menuAbierto = signal(false);
 

@@ -12,6 +12,7 @@ import { StorageService } from '../../../core/services/storage.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { InventarioService } from '../../../core/services/inventario.service';
 import { PdfService } from '../../../core/services/pdf.service';
+import { AuditService, AuditEntry } from '../../../core/services/audit.service';
 import { SaldoCliente } from '../../../core/models/cliente.model';
 import { Movimiento } from '../../../core/models/movimiento.model';
 import { Producto } from '../../../core/models/producto.model';
@@ -86,9 +87,19 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
       <div class="flex items-center gap-3 mb-6">
         <a routerLink="/admin/clientes"
            class="w-9 h-9 rounded-lg bg-zinc-800 flex items-center justify-center
-                  text-zinc-400 hover:text-white transition-colors border border-zinc-700">
+                  text-zinc-400 hover:text-white transition-colors border border-zinc-700 shrink-0">
           <i class="pi pi-arrow-left text-sm"></i>
         </a>
+        @if (cliente()?.foto_url) {
+          <img [src]="cliente()!.foto_url!" alt=""
+               style="width:48px;height:48px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid #6366f1">
+        } @else {
+          <div style="width:48px;height:48px;border-radius:50%;background:#27272a;flex-shrink:0;
+                      display:flex;align-items:center;justify-content:center;border:2px solid #3f3f46;
+                      color:#a1a1aa;font-weight:700;font-size:18px">
+            {{ cliente()?.nombre?.charAt(0)?.toUpperCase() }}
+          </div>
+        }
         <div class="min-w-0">
           <h2 class="text-2xl font-bold text-white truncate">{{ cliente()?.nombre }}</h2>
           <p class="text-zinc-500 text-sm">{{ cliente()?.telefono || 'Sin teléfono' }}</p>
@@ -116,14 +127,24 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
             </p>
           </div>
           <div class="rounded-2xl p-5 border-2"
-               [class]="(cliente()?.saldo ?? 0) > 0
-                 ? 'bg-amber-950/20 border-amber-500/30'
-                 : 'bg-green-950/20 border-green-500/30'">
+               [class]="limiteExcedido()
+                 ? 'bg-red-950/20 border-red-500/40'
+                 : (cliente()?.saldo ?? 0) > 0
+                   ? 'bg-amber-950/20 border-amber-500/30'
+                   : 'bg-green-950/20 border-green-500/30'">
             <p class="text-zinc-500 text-xs uppercase tracking-widest font-medium">Saldo actual</p>
             <p class="text-xl font-bold mt-1"
-               [class]="(cliente()?.saldo ?? 0) > 0 ? 'text-amber-400' : 'text-green-400'">
+               [class]="limiteExcedido() ? 'text-red-400' : (cliente()?.saldo ?? 0) > 0 ? 'text-amber-400' : 'text-green-400'">
               {{ cliente()?.saldo | currency:'COP':'$ ':'1.0-0' }}
             </p>
+            @if (cliente()?.limite_credito) {
+              <p class="text-zinc-600 text-xs mt-0.5">
+                Límite: {{ cliente()!.limite_credito | currency:'COP':'$ ':'1.0-0' }}
+                @if (limiteExcedido()) {
+                  <span class="text-red-400 font-bold ml-1">⚠ Excedido</span>
+                }
+              </p>
+            }
           </div>
         </div>
 
@@ -201,6 +222,31 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
                     </span>
                   }
                 </button>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- Historial de cambios -->
+        @if (auditLog().length > 0) {
+          <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-5">
+            <h3 class="text-white font-semibold text-sm flex items-center gap-2 mb-3">
+              <span class="w-6 h-6 bg-zinc-700/40 rounded-lg flex items-center justify-center">
+                <i class="pi pi-shield text-zinc-400 text-xs"></i>
+              </span>
+              Historial de cambios
+            </h3>
+            <div class="space-y-1.5">
+              @for (e of auditLog(); track e.id) {
+                <div class="flex items-center gap-3 text-xs py-1.5 border-b border-zinc-800 last:border-0">
+                  <span class="px-2 py-0.5 rounded font-semibold"
+                        [style]="e.accion === 'CREAR' ? 'background:rgb(34 197 94/0.1);color:#4ade80'
+                               : e.accion === 'EDITAR' ? 'background:rgb(99 102 241/0.1);color:#818cf8'
+                               : 'background:rgb(239 68 68/0.1);color:#f87171'">
+                    {{ e.accion }}
+                  </span>
+                  <span class="text-zinc-500">{{ e.created_at | date:'dd/MM/yyyy HH:mm' }}</span>
+                </div>
               }
             </div>
           </div>
@@ -446,6 +492,7 @@ export class ClienteDetalleComponent implements OnInit {
   private auth = inject(AuthService);
   private invSvc = inject(InventarioService);
   private pdfSvc = inject(PdfService);
+  private auditSvc = inject(AuditService);
   private msg = inject(MessageService);
   private confirm = inject(ConfirmationService);
   private fb = inject(FormBuilder);
@@ -479,6 +526,12 @@ export class ClienteDetalleComponent implements OnInit {
   cliente = signal<SaldoCliente | null>(null);
   movimientos = signal<Movimiento[]>([]);
   productos = signal<Producto[]>([]);
+  auditLog = signal<AuditEntry[]>([]);
+
+  limiteExcedido = computed(() => {
+    const c = this.cliente();
+    return !!(c?.limite_credito && c.saldo > c.limite_credito);
+  });
 
   mesHistorial = signal({ mes: new Date().getMonth() + 1, anio: new Date().getFullYear() });
   nombreMesHistorial = computed(() => MESES_NOMBRE[this.mesHistorial().mes - 1]);
@@ -544,14 +597,16 @@ export class ClienteDetalleComponent implements OnInit {
   async cargar(id: string) {
     this.cargando.set(true);
     try {
-      const [cliente, movs, prods] = await Promise.all([
+      const [cliente, movs, prods, audit] = await Promise.all([
         this.clientesSvc.getById(id),
         this.movSvc.getByCliente(id),
-        this.productosSvc.getAll()
+        this.productosSvc.getAll(),
+        this.auditSvc.getByRegistro('clientes', id).catch(() => [])
       ]);
       this.cliente.set(cliente);
       this.movimientos.set(movs);
       this.productos.set(prods);
+      this.auditLog.set(audit);
     } finally {
       this.cargando.set(false);
     }
@@ -646,6 +701,14 @@ export class ClienteDetalleComponent implements OnInit {
 
   async registrarCompra() {
     if (this.totalCarrito() === 0) return;
+    const c = this.cliente();
+    if (c?.limite_credito && (c.saldo + this.totalCarrito()) > c.limite_credito) {
+      this.msg.add({
+        severity: 'warn',
+        summary: 'Límite de crédito',
+        detail: `Esta compra superaría el límite de ${c.limite_credito.toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })}`
+      });
+    }
     this.guardando.set(true);
     try {
       let foto_url: string | undefined;

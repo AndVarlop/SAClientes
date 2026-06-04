@@ -27,6 +27,17 @@ export class StorageService {
     return data.publicUrl;
   }
 
+  async subirFotoPerfil(clienteId: string, file: File): Promise<string> {
+    const ext = file.name.split('.').pop();
+    const path = `perfiles/${clienteId}.${ext}`;
+    const { error } = await this.sb.storage
+      .from('evidencias')
+      .upload(path, file, { upsert: true });
+    if (error) throw error;
+    const { data } = this.sb.storage.from('evidencias').getPublicUrl(path);
+    return data.publicUrl + '?t=' + Date.now();
+  }
+
   async subirFactura(clienteId: string, blob: Blob, mes: number, anio: number): Promise<string> {
     const mesStr = String(mes).padStart(2, '0');
     const path = `${clienteId}/factura-${anio}-${mesStr}-${Date.now()}.pdf`;

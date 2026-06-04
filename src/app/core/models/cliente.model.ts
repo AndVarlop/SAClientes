@@ -3,6 +3,8 @@ export interface Cliente {
   nombre: string;
   telefono?: string;
   activo: boolean;
+  limite_credito?: number | null;
+  foto_url?: string | null;
   created_at: string;
 }
 
