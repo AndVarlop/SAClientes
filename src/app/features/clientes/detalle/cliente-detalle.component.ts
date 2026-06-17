@@ -807,10 +807,10 @@ export class ClienteDetalleComponent implements OnInit {
       const texto = encodeURIComponent(
 `Hola ${cliente.nombre}! Pasó por aquí para mandar tu factura jeje
 
-Deuda: ${fmt(deuda)}
+Total de compra: ${fmt(deuda)}
 Abono: ${fmt(abono)}
 
-Total: ${fmt(total)}
+Total a pagar: ${fmt(total)}
 
 Detalle:
 ${urlPdf}

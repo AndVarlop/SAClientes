@@ -339,18 +339,65 @@ import { SolicitudPago } from '../../core/services/solicitudes-pago.service';
                     </div>
                   }
 
-                  <!-- Info Nequi -->
+                  <!-- Monto a copiar -->
+                  <button (click)="copiarMonto()"
+                          style="width:100%;background:#111;border:1px solid #27272a;border-radius:14px;
+                                 padding:16px;margin-bottom:12px;cursor:pointer;transition:border-color 0.15s;text-align:left"
+                          onmouseover="this.style.borderColor='#6366f1'"
+                          onmouseout="this.style.borderColor='#27272a'">
+                    <p class="text-zinc-500 text-xs uppercase tracking-wider mb-1">Monto a pagar · toca para copiar</p>
+                    <div class="flex items-center justify-between">
+                      <p class="text-2xl font-bold"
+                         [style]="tipoPago === 'TOTAL' ? 'color:#fbbf24' : 'color:#fbbf24'">
+                        {{ montoACopiar() | currency:'COP':'$ ':'1.0-0' }}
+                      </p>
+                      <span style="color:#818cf8;font-size:12px;border:1px solid #3730a3;
+                                   border-radius:8px;padding:5px 12px;font-weight:600">
+                        <i class="pi pi-copy mr-1"></i>{{ copiadoMonto ? '✓ Copiado' : 'Copiar' }}
+                      </span>
+                    </div>
+                  </button>
+
+                  <!-- Nequi + Bre-B -->
                   <div style="background:#111; border:1px solid #1f1f23; border-radius:14px; padding:16px"
                        class="mb-4">
-                    <p class="text-zinc-500 text-xs uppercase tracking-wider mb-2">Paga a este número Nequi</p>
-                    <div class="flex items-center justify-between">
-                      <p class="text-white text-2xl font-bold tracking-widest">3014030939</p>
-                      <button (click)="copiarNequi()"
-                              style="color:#818cf8; font-size:12px; border:1px solid #3730a3; background:transparent; border-radius:8px; padding:6px 12px; cursor:pointer">
-                        <i class="pi pi-copy mr-1"></i>{{ copiado ? 'Copiado' : 'Copiar' }}
-                      </button>
-                    </div>
-                    <p class="text-zinc-600 text-xs mt-2">Envía el pago y toma captura de pantalla</p>
+                    <p class="text-zinc-500 text-xs uppercase tracking-wider mb-3">Paga aquí · toca el número para copiar</p>
+
+                    <button (click)="copiarNequi()"
+                            style="width:100%;background:transparent;border:1px solid #27272a;border-radius:12px;
+                                   padding:12px 14px;margin-bottom:10px;cursor:pointer;transition:border-color 0.15s;text-align:left"
+                            onmouseover="this.style.borderColor='#6366f1'"
+                            onmouseout="this.style.borderColor='#27272a'">
+                      <div class="flex items-center justify-between">
+                        <div>
+                          <p class="text-zinc-500 text-xs mb-0.5">Nequi</p>
+                          <p class="text-white text-xl font-bold tracking-widest">3014030939</p>
+                        </div>
+                        <span style="color:#818cf8;font-size:12px;border:1px solid #3730a3;
+                                     border-radius:8px;padding:5px 10px;font-weight:600;flex-shrink:0">
+                          <i class="pi pi-copy mr-1"></i>{{ copiado ? '✓ Copiado' : 'Copiar' }}
+                        </span>
+                      </div>
+                    </button>
+
+                    <button (click)="copiarBreB()"
+                            style="width:100%;background:transparent;border:1px solid #27272a;border-radius:12px;
+                                   padding:12px 14px;cursor:pointer;transition:border-color 0.15s;text-align:left"
+                            onmouseover="this.style.borderColor='#6366f1'"
+                            onmouseout="this.style.borderColor='#27272a'">
+                      <div class="flex items-center justify-between">
+                        <div>
+                          <p class="text-zinc-500 text-xs mb-0.5">Bre-B / Llave</p>
+                          <p class="text-white text-xl font-bold tracking-widest">3014030939</p>
+                        </div>
+                        <span style="color:#818cf8;font-size:12px;border:1px solid #3730a3;
+                                     border-radius:8px;padding:5px 10px;font-weight:600;flex-shrink:0">
+                          <i class="pi pi-copy mr-1"></i>{{ copiadoBreB ? '✓ Copiado' : 'Copiar' }}
+                        </span>
+                      </div>
+                    </button>
+
+                    <p class="text-zinc-600 text-xs mt-3 text-center">Envía el pago y adjunta la captura abajo</p>
                   </div>
 
                   <!-- Foto comprobante -->
@@ -767,6 +814,8 @@ Puedes consultarlo en: ${window.location.origin}`
   fotoFile: File | null = null;
   fotoPreview = '';
   copiado = false;
+  copiadoBreB = false;
+  copiadoMonto = false;
   enviando = signal(false);
   enviado = signal(false);
   errorEnvio = signal('');
@@ -863,10 +912,29 @@ Puedes consultarlo en: ${window.location.origin}`
     this.fotoPreview = '';
   }
 
+  montoACopiar = computed(() => {
+    if (this.tipoPago === 'TOTAL') return this.clienteSeleccionado()?.saldo ?? 0;
+    return Number(this.montoPago) || 0;
+  });
+
   copiarNequi() {
     navigator.clipboard.writeText('3014030939').catch(() => {});
     this.copiado = true;
     setTimeout(() => (this.copiado = false), 2000);
+  }
+
+  copiarBreB() {
+    navigator.clipboard.writeText('3014030939').catch(() => {});
+    this.copiadoBreB = true;
+    setTimeout(() => (this.copiadoBreB = false), 2000);
+  }
+
+  copiarMonto() {
+    const m = this.montoACopiar();
+    if (!m) return;
+    navigator.clipboard.writeText(String(m)).catch(() => {});
+    this.copiadoMonto = true;
+    setTimeout(() => (this.copiadoMonto = false), 2000);
   }
 
   puedeEnviar(): boolean {
