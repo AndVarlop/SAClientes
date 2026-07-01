@@ -168,13 +168,13 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
             <select [(ngModel)]="mesFiltro"
                     class="bg-zinc-800 border border-zinc-700 text-white text-sm rounded-lg px-3 py-2 outline-none focus:border-indigo-500">
               @for (m of mesesOpciones; track m.valor) {
-                <option [value]="m.valor">{{ m.label }}</option>
+                <option [ngValue]="m.valor">{{ m.label }}</option>
               }
             </select>
             <select [(ngModel)]="anioFiltro"
                     class="bg-zinc-800 border border-zinc-700 text-white text-sm rounded-lg px-3 py-2 outline-none focus:border-indigo-500">
               @for (a of aniosOpciones; track a) {
-                <option [value]="a">{{ a }}</option>
+                <option [ngValue]="a">{{ a }}</option>
               }
             </select>
             <button pButton label="Descargar PDF" icon="pi pi-download" severity="secondary"
