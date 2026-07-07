@@ -42,7 +42,7 @@ import { DialogModule } from 'primeng/dialog';
                placeholder="Buscar cliente..." class="w-full" />
       </div>
 
-      <div class="flex gap-2 mb-4">
+      <div class="flex gap-2 mb-3">
         @for (f of filtros; track f.valor) {
           <button (click)="filtroEstado.set(f.valor)"
                   class="px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors"
@@ -53,6 +53,32 @@ import { DialogModule } from 'primeng/dialog';
           </button>
         }
       </div>
+
+      <div class="flex items-center gap-2 mb-4 overflow-x-auto pb-1">
+        <button (click)="filtroMes.set(null)"
+                class="px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors shrink-0"
+                [class]="filtroMes() === null
+                  ? 'bg-indigo-600 border-indigo-500 text-white'
+                  : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-white'">
+          Todo el año
+        </button>
+        @for (m of meses; track m.valor) {
+          <button (click)="filtroMes.set(m.valor)"
+                  class="px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors shrink-0"
+                  [class]="filtroMes() === m.valor
+                    ? 'bg-indigo-600 border-indigo-500 text-white'
+                    : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-white'">
+            {{ m.label }}
+          </button>
+        }
+      </div>
+
+      @if (filtroMes() !== null) {
+        <p class="text-zinc-500 text-xs mb-3">
+          <i class="pi pi-info-circle mr-1"></i>
+          Deuda de {{ meses[filtroMes()! - 1].label }} {{ anioActual }} (compras menos abonos del mes)
+        </p>
+      }
 
       @if (cargando()) {
         <div class="space-y-2">
@@ -110,7 +136,7 @@ import { DialogModule } from 'primeng/dialog';
           }
         </div>
 
-        @if (totalPags() > 1) {
+        @if (filtroMes() === null && totalPags() > 1) {
           <div class="flex items-center justify-between mt-4 pt-4 border-t border-zinc-800">
             <button (click)="prevPag()" [disabled]="pagina() === 1"
                     class="px-4 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400
@@ -186,6 +212,14 @@ export class ClientesListaComponent implements OnInit {
   mostrarForm = false;
   busqueda = signal('');
   filtroEstado = signal<'todos' | 'al-dia' | 'pendiente'>('todos');
+  filtroMes = signal<number | null>(null); // 1-12 o null = todo el año
+  readonly anioActual = new Date().getFullYear();
+  readonly meses = [
+    { valor: 1, label: 'Ene' }, { valor: 2, label: 'Feb' }, { valor: 3, label: 'Mar' },
+    { valor: 4, label: 'Abr' }, { valor: 5, label: 'May' }, { valor: 6, label: 'Jun' },
+    { valor: 7, label: 'Jul' }, { valor: 8, label: 'Ago' }, { valor: 9, label: 'Sep' },
+    { valor: 10, label: 'Oct' }, { valor: 11, label: 'Nov' }, { valor: 12, label: 'Dic' },
+  ];
   clientes = signal<SaldoCliente[]>([]);
   clienteEdit: SaldoCliente | null = null;
   pagina = signal(1);
@@ -212,6 +246,7 @@ export class ClientesListaComponent implements OnInit {
     effect(() => {
       this.busqueda();
       this.filtroEstado();
+      this.filtroMes();
       if (this._debounceTimer) clearTimeout(this._debounceTimer);
       this._debounceTimer = setTimeout(() => {
         this.pagina.set(1);
@@ -227,12 +262,20 @@ export class ClientesListaComponent implements OnInit {
   async cargar() {
     this.cargando.set(true);
     try {
-      const { data, count } = await this.svc.getPaginado({
-        page: this.pagina(),
-        pageSize: this.PAGE_SIZE,
-        q: this.busqueda(),
-        estado: this.filtroEstado()
-      });
+      const mes = this.filtroMes();
+      const { data, count } = mes !== null
+        ? await this.svc.getDeudaPorMes({
+            anio: this.anioActual,
+            mes,
+            q: this.busqueda(),
+            estado: this.filtroEstado()
+          })
+        : await this.svc.getPaginado({
+            page: this.pagina(),
+            pageSize: this.PAGE_SIZE,
+            q: this.busqueda(),
+            estado: this.filtroEstado()
+          });
       this.clientes.set(data);
       this.totalClientes.set(count);
     } finally {
